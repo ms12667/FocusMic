@@ -7,11 +7,11 @@ from pathlib import Path
 
 import cv2
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
-    QLabel, QMainWindow, QPlainTextEdit, QPushButton, QSlider, QSpinBox,
-    QVBoxLayout, QWidget,
+    QLabel, QMainWindow, QMenu, QPlainTextEdit, QPushButton, QSlider, QSpinBox,
+    QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 PROBE = Path(__file__).resolve().parent
@@ -27,6 +27,7 @@ ICON = PROBE / "focusmic_icon.ico"
 
 class MainWindow(QMainWindow):
     log_signal = Signal(str)
+    hotkey_signal = Signal()
 
     def __init__(self):
         super().__init__()
@@ -39,6 +40,10 @@ class MainWindow(QMainWindow):
         self.last_log = ""
         self._build()
         self.log_signal.connect(self.log.appendPlainText)
+        self.hotkey_signal.connect(self._toggle_bypass_from_hotkey)
+        self._hotkey = None
+        self._setup_tray()
+        self._setup_hotkey()
         self.timer = QTimer(self)
         self.timer.setInterval(50)
         self.timer.timeout.connect(self.refresh)
@@ -114,9 +119,14 @@ class MainWindow(QMainWindow):
         self.reacquire_btn = QPushButton("重新锁定")
         self.reacquire_btn.clicked.connect(self.reacquire)
         self.reacquire_btn.setEnabled(False)
+        self.bypass_btn = QPushButton("旁路：关")
+        self.bypass_btn.setCheckable(True)
+        self.bypass_btn.setEnabled(False)
+        self.bypass_btn.toggled.connect(self.toggle_bypass)
         buttons.addWidget(self.start_btn)
         buttons.addWidget(self.stop_btn)
         buttons.addWidget(self.reacquire_btn)
+        buttons.addWidget(self.bypass_btn)
         side.addLayout(buttons)
 
         self.stats = QLabel("—")
@@ -140,6 +150,56 @@ class MainWindow(QMainWindow):
             QLabel { color:#dfe6ef; }
         """)
 
+    def _setup_tray(self):
+        try:
+            self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
+            menu = QMenu()
+            show_action = QAction("显示 / 隐藏", self)
+            show_action.triggered.connect(lambda: self.hide() if self.isVisible() else self.showNormal())
+            menu.addAction(show_action)
+            start_action = QAction("开始分离", self)
+            start_action.triggered.connect(self.start)
+            menu.addAction(start_action)
+            stop_action = QAction("停止", self)
+            stop_action.triggered.connect(self.stop)
+            menu.addAction(stop_action)
+            bypass_action = QAction("切换旁路 (Ctrl+Alt+M)", self)
+            bypass_action.triggered.connect(self.bypass_btn.toggle)
+            menu.addAction(bypass_action)
+            menu.addSeparator()
+            quit_action = QAction("退出", self)
+            quit_action.triggered.connect(self.close)
+            menu.addAction(quit_action)
+            self.tray.setContextMenu(menu)
+            self.tray.setToolTip("FocusMic")
+            self.tray.activated.connect(
+                lambda reason: self.showNormal() if reason == QSystemTrayIcon.DoubleClick else None)
+            self.tray.show()
+        except Exception as exc:
+            self.tray = None
+            self.log_signal.emit(f"托盘不可用：{exc}")
+
+    def _setup_hotkey(self):
+        try:
+            import keyboard
+            self._keyboard = keyboard
+            self._hotkey = keyboard.add_hotkey("ctrl+alt+m", self.hotkey_signal.emit)
+            self.log_signal.emit("全局旁路热键：Ctrl+Alt+M")
+        except Exception as exc:
+            self._keyboard = None
+            self._hotkey = None
+            self.log_signal.emit(f"全局热键不可用：{exc}")
+
+    def _toggle_bypass_from_hotkey(self):
+        if self.pipeline is not None and self.worker is not None and self.worker.is_alive():
+            self.bypass_btn.setChecked(not self.bypass_btn.isChecked())
+
+    def toggle_bypass(self, checked: bool):
+        if self.pipeline is not None:
+            self.pipeline.manual_bypass = bool(checked)
+        self.bypass_btn.setText("旁路：开" if checked else "旁路：关")
+        self.log_signal.emit("手动旁路：" + ("开（原始麦克风）" if checked else "关（Falcon）"))
+
     def start(self):
         if self.worker and self.worker.is_alive():
             return
@@ -161,6 +221,9 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.reacquire_btn.setEnabled(True)
+        self.bypass_btn.setEnabled(True)
+        if self.bypass_btn.isChecked():
+            self.bypass_btn.setChecked(False)
         self.mic.setEnabled(False)
         self.camera.setEnabled(False)
         self.model.setEnabled(False)
@@ -203,6 +266,10 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.reacquire_btn.setEnabled(False)
+        self.bypass_btn.setEnabled(False)
+        if self.bypass_btn.isChecked():
+            self.bypass_btn.setChecked(False)
+        self.bypass_btn.setText("旁路：关")
         self.mic.setEnabled(True)
         self.camera.setEnabled(True)
         self.model.setEnabled(True)
@@ -256,6 +323,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.stop()
+        if self._hotkey is not None and self._keyboard is not None:
+            try:
+                self._keyboard.remove_hotkey(self._hotkey)
+            except Exception:
+                pass
+        if getattr(self, "tray", None) is not None:
+            self.tray.hide()
         event.accept()
 
 

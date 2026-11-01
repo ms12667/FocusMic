@@ -47,6 +47,8 @@ class NativePipeline:
         self.last_lag = 0.0
         self.safe_mode = bool(safe_mode)
         self.bypass = False
+        self.manual_bypass = False
+        self.last_effective_bypass = False
 
     def load(self, device="cuda"):
         weights = PROBE / "weights" / ("falcon-big.pt" if self.variant == "big" else "falcon.pt")
@@ -139,7 +141,11 @@ class NativePipeline:
                         self.bypass = False
                         mode_changed = True
                         print("视觉恢复：回到 Falcon 输出", flush=True)
-                if self.bypass:
+                effective_bypass = self.bypass or self.manual_bypass
+                if effective_bypass != self.last_effective_bypass:
+                    mode_changed = True
+                    self.last_effective_bypass = effective_bypass
+                if effective_bypass:
                     out_chunk = raw
                     future = None
                 else:
@@ -167,7 +173,7 @@ class NativePipeline:
                           f"skip {self.skipped} | audio lag {lag:5.2f}s | "
                           f"tracked {tracked*100:5.1f}% | cable {out.get('queued',0)}q/"
                           f"{out.get('dropped',0)}drop"
-                          f"{' | SAFE BYPASS' if self.bypass else ''}", flush=True)
+                          f"{' | BYPASS' if (self.bypass or self.manual_bypass) else ''}", flush=True)
                 end += self.hop
         except KeyboardInterrupt:
             pass
@@ -195,7 +201,9 @@ class NativePipeline:
             "infer_ms": self.last_infer_ms,
             "tracked": self.last_tracked,
             "audio_lag": self.last_lag,
-            "bypass": self.bypass,
+            "bypass": self.bypass or self.manual_bypass,
+            "safe_bypass": self.bypass,
+            "manual_bypass": self.manual_bypass,
             "cable": cable,
             "monitor": monitor,
         }
