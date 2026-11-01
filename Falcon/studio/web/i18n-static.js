@@ -126,6 +126,7 @@ export default {
   "CABLE 直连（低延迟）": "Native CABLE output (low latency)",
   "由服务端直接写 CABLE Input": "Server writes directly to CABLE Input",
   "CABLE 输出": "CABLE output",
+  "输出到 CABLE Input": "Output to CABLE Input",
   "自动": "AUTO",
   "输出设备": "Output device",
   "自动写入 CABLE Input；Discord 麦克风选 CABLE Output": "Writes to CABLE Input automatically; choose CABLE Output as the Discord microphone",
