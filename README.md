@@ -49,6 +49,11 @@ start_focusmic.bat          Windows one-click launcher
 HANDOFF.md                  detailed project handoff / measurements
 prep_recordings.py          extract 16 kHz audio + 25 fps mouth crops
 eval_*.py                   offline Falcon / VoxLock evaluation
+native_app.py               native CLI prototype (mic + camera -> Falcon -> CABLE)
+native/                     audio/video capture, mouth tracking, scheduler
+focusmic_icon_256.png       app icon (source)
+focusmic_icon.svg           vector icon
+focusmic_icon.ico           multi-size Windows icon
 ```
 
 ## Run (Windows)
@@ -61,6 +66,17 @@ eval_*.py                   offline Falcon / VoxLock evaluation
    `CABLE Input (VB-Audio Virtual Cable)`.
 4. In Discord/game select `CABLE Output (VB-Audio Virtual Cable)` as microphone.
    Disable Discord noise suppression, AGC, echo cancellation.
+
+## Native CLI (M1 prototype, no browser)
+
+```bat
+.venv\Scripts\python.exe native_app.py --list --list-cameras
+.venv\Scripts\python.exe native_app.py --simulate --duration 20 --no-output --save-wav sim_out.wav
+.venv\Scripts\python.exe native_app.py --mic "麦克风" --camera 0 --duration 60
+```
+
+The live command uses the microphone and camera; the simulate command only
+reads files under `testrecordings/` and does not touch devices.
 
 ## Not included / excluded
 
