@@ -181,6 +181,12 @@ class MainWindow(QMainWindow):
             self.pipeline.stop()
         if self.worker is not None and self.worker.is_alive():
             self.worker.join(timeout=3.0)
+        if self.tracker is not None:
+            self.tracker.stop()
+        self.pipeline = None
+        self.tracker = None
+        self.worker = None
+        self.stats.setText("—")
         self._reset_buttons()
 
     def _reset_buttons(self):
@@ -192,6 +198,8 @@ class MainWindow(QMainWindow):
         self.av.setEnabled(True)
         self.monitor.setEnabled(True)
         self.cable.setText("CABLE Input：已停止")
+        self.preview.clear()
+        self.preview.setText("摄像头预览")
 
     def refresh(self):
         if self.tracker is not None:
@@ -226,8 +234,13 @@ class MainWindow(QMainWindow):
                 f"cable {cable.get('queued',0)}q/{cable.get('dropped',0)}drop"
             )
             if not s["running"] and self.worker is not None and not self.worker.is_alive():
-                if self.start_btn.isEnabled() is False:
-                    self._reset_buttons()
+                if self.tracker is not None:
+                    self.tracker.stop()
+                self.tracker = None
+                self.pipeline = None
+                self.worker = None
+                self.stats.setText("—")
+                self._reset_buttons()
 
     def closeEvent(self, event):
         self.stop()
