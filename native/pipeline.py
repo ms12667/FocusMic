@@ -25,7 +25,8 @@ FADE = 320
 
 class NativePipeline:
     def __init__(self, audio, mouth, *, variant="small", av_offset_ms=30.0,
-                 hop=3200, gain_db=6.0, output=True, monitor=False, save_wav=None):
+                 hop=3200, gain_db=6.0, output=True, monitor=False, safe_mode=True,
+                 save_wav=None):
         self.audio = audio
         self.mouth = mouth
         self.variant = variant
@@ -44,6 +45,8 @@ class NativePipeline:
         self.last_infer_ms = 0.0
         self.last_tracked = 0.0
         self.last_lag = 0.0
+        self.safe_mode = bool(safe_mode)
+        self.bypass = False
 
     def load(self, device="cuda"):
         weights = PROBE / "weights" / ("falcon-big.pt" if self.variant == "big" else "falcon.pt")
@@ -76,6 +79,9 @@ class NativePipeline:
         end = session_epoch + self.hop + GUARD
         future = None
         last_end = None
+        last_output_tail = None
+        lost_windows = 0
+        ok_windows = 0
         last_report = time.perf_counter()
         started = time.perf_counter()
         try:
@@ -114,14 +120,41 @@ class NativePipeline:
                 if future is not None and last_end is not None and end - last_end == self.hop:
                     ramp = np.linspace(0, 1, FADE, dtype=np.float32)
                     chunk[:FADE] = future * (1 - ramp) + chunk[:FADE] * ramp
-                future = pred[stop:stop + FADE].copy()
+                model_future = pred[stop:stop + FADE].copy()
                 last_end = end
+                raw = window[stop - self.hop:stop].copy()
+                mode_changed = False
+                if self.safe_mode:
+                    if tracked < 0.15:
+                        lost_windows += 1
+                        ok_windows = 0
+                    else:
+                        lost_windows = 0
+                        ok_windows += 1
+                    if not self.bypass and lost_windows >= 3:
+                        self.bypass = True
+                        mode_changed = True
+                        print("视觉丢失：直通原始麦克风", flush=True)
+                    elif self.bypass and ok_windows >= 2:
+                        self.bypass = False
+                        mode_changed = True
+                        print("视觉恢复：回到 Falcon 输出", flush=True)
+                if self.bypass:
+                    out_chunk = raw
+                    future = None
+                else:
+                    out_chunk = chunk
+                    future = model_future
+                if mode_changed and last_output_tail is not None:
+                    ramp = np.linspace(0, 1, FADE, dtype=np.float32)
+                    out_chunk[:FADE] = last_output_tail * (1 - ramp) + out_chunk[:FADE] * ramp
+                last_output_tail = out_chunk[-FADE:].copy()
                 if self.output is not None:
-                    self.output.push(chunk)
+                    self.output.push(out_chunk)
                 if self.monitor is not None:
-                    self.monitor.push(chunk)
+                    self.monitor.push(out_chunk)
                 if self.save_wav is not None:
-                    self.saved.append(chunk.copy())
+                    self.saved.append(out_chunk.copy())
                 self.windows += 1
                 # Console stats once per second.
                 now = time.perf_counter()
@@ -133,7 +166,8 @@ class NativePipeline:
                     print(f"infer {self.last_infer_ms:5.1f} ms | windows {self.windows} | "
                           f"skip {self.skipped} | audio lag {lag:5.2f}s | "
                           f"tracked {tracked*100:5.1f}% | cable {out.get('queued',0)}q/"
-                          f"{out.get('dropped',0)}drop", flush=True)
+                          f"{out.get('dropped',0)}drop"
+                          f"{' | SAFE BYPASS' if self.bypass else ''}", flush=True)
                 end += self.hop
         except KeyboardInterrupt:
             pass
@@ -161,6 +195,7 @@ class NativePipeline:
             "infer_ms": self.last_infer_ms,
             "tracked": self.last_tracked,
             "audio_lag": self.last_lag,
+            "bypass": self.bypass,
             "cable": cable,
             "monitor": monitor,
         }

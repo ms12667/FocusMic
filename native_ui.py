@@ -111,8 +111,12 @@ class MainWindow(QMainWindow):
         self.stop_btn = QPushButton("停止")
         self.stop_btn.clicked.connect(self.stop)
         self.stop_btn.setEnabled(False)
+        self.reacquire_btn = QPushButton("重新锁定")
+        self.reacquire_btn.clicked.connect(self.reacquire)
+        self.reacquire_btn.setEnabled(False)
         buttons.addWidget(self.start_btn)
         buttons.addWidget(self.stop_btn)
+        buttons.addWidget(self.reacquire_btn)
         side.addLayout(buttons)
 
         self.stats = QLabel("—")
@@ -156,6 +160,7 @@ class MainWindow(QMainWindow):
         )
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self.reacquire_btn.setEnabled(True)
         self.mic.setEnabled(False)
         self.camera.setEnabled(False)
         self.model.setEnabled(False)
@@ -176,6 +181,11 @@ class MainWindow(QMainWindow):
         finally:
             self.log_signal.emit("已停止")
 
+    def reacquire(self):
+        if self.tracker is not None:
+            self.tracker.reset_target()
+            self.log_signal.emit("已清除目标，下一帧重新选择最大/最近人脸")
+
     def stop(self):
         if self.pipeline is not None:
             self.pipeline.stop()
@@ -192,6 +202,7 @@ class MainWindow(QMainWindow):
     def _reset_buttons(self):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.reacquire_btn.setEnabled(False)
         self.mic.setEnabled(True)
         self.camera.setEnabled(True)
         self.model.setEnabled(True)
@@ -232,6 +243,7 @@ class MainWindow(QMainWindow):
                 f"infer {s['infer_ms']:5.1f} ms | windows {s['windows']} | skip {s['skipped']} | "
                 f"tracked {s['tracked']*100:5.1f}% | lag {s['audio_lag']:5.2f}s | "
                 f"cable {cable.get('queued',0)}q/{cable.get('dropped',0)}drop"
+                f"{' | 直通' if s.get('bypass') else ''}"
             )
             if not s["running"] and self.worker is not None and not self.worker.is_alive():
                 if self.tracker is not None:

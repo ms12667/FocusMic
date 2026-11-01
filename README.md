@@ -51,6 +51,7 @@ prep_recordings.py          extract 16 kHz audio + 25 fps mouth crops
 eval_*.py                   offline Falcon / VoxLock evaluation
 native_app.py               native CLI prototype (mic + camera -> Falcon -> CABLE)
 native_ui.py                minimal PySide6 window
+start_focusmic_native.bat   one-click native launcher (pythonw)
 native/                     audio/video capture, mouth tracking, scheduler
 focusmic_icon_256.png       app icon (source)
 focusmic_icon.svg           vector icon
@@ -79,7 +80,8 @@ focusmic_icon.ico           multi-size Windows icon
 The live command uses the microphone and camera; the simulate command only
 reads files under `testrecordings/` and does not touch devices.
 
-Minimal native window (PySide6):
+Minimal native window (PySide6): double-click
+`start_focusmic_native.bat`, or run:
 
 ```bat
 .venv\Scripts\python.exe native_ui.py

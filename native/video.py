@@ -185,6 +185,13 @@ class MouthTracker:
                 tracked += 1
         return out, tracked / count
 
+    def reset_target(self):
+        with self.lock:
+            self.target_face = None
+            self.target_width = None
+            self.last_crop = None
+            self.preview_box = None
+
     def preview_frame(self):
         with self.lock:
             frame = None if self.preview is None else self.preview.copy()
