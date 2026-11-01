@@ -13,10 +13,25 @@ This repository is a **private working backup**, not a public release yet.
 - **+6 dB** output makeup gain
 - Local inference only; microphone + camera -> VB-CABLE -> Discord/game
 - Measured headphone-monitor latency: ~470 ms
-- **Native CABLE output (experimental)**: the server can write the separated
-  stream directly to `CABLE Input` through WASAPI instead of the browser media
-  element; enable the `CABLE 直连（低延迟）` toggle in the meeting section.
+- **Native CABLE output is on by default**: when separation starts, the server
+  writes the separated stream directly to `CABLE Input` through WASAPI. There
+  is no meeting/game device selector; the UI shows one CABLE output status.
   Loopback test: ~74 ms CABLE/stream latency, waveform correlation 0.99999.
+
+## VB-CABLE naming (important)
+
+Windows classifies the two endpoints as follows (verified from the MMDevices
+registry on this machine):
+
+| Windows class | Device | Used by |
+|---|---|---|
+| Render / playback / 扬声器 | **CABLE Input** | FocusMic output |
+| Capture / recording / 麦克风 | **CABLE Output** | Discord / game microphone |
+
+So FocusMic writes to `CABLE Input`, and Discord/game selects `CABLE Output`
+as its microphone. `CABLE Input` is not a recording endpoint and cannot be
+selected as a microphone; if it appears in a device list, that is the output
+list. This is VB-CABLE's standard naming, not a bug.
 
 ## Layout
 
@@ -41,10 +56,9 @@ eval_*.py                   offline Falcon / VoxLock evaluation
 1. Python 3.12 venv with `torch` (CUDA), `fastapi`, `uvicorn`, `websockets`,
    `numpy`, `Pillow`, `PyYAML`, `einops`, `soundfile`, `sounddevice`.
 2. Double-click `start_focusmic.bat`.
-3. In the page: enable devices, select the **physical/headset microphone**, set
-   meeting output to `CABLE Input (VB-Audio Virtual Cable)`, enable it, start.
-   For the native path, use the `CABLE 直连（低延迟）` toggle instead (make sure
-   the browser meeting output is off).
+3. In the page: enable devices, select the **physical/headset microphone**, then
+   start separation. CABLE output starts automatically and writes to
+   `CABLE Input (VB-Audio Virtual Cable)`.
 4. In Discord/game select `CABLE Output (VB-Audio Virtual Cable)` as microphone.
    Disable Discord noise suppression, AGC, echo cancellation.
 

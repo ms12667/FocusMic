@@ -692,6 +692,11 @@ async function startSession() {
     socket.onmessage = (event) => { if (generation === state.generation && state.running) handleResult(event.data); };
     socket.onerror = () => { if (state.running) { stopCapture(); notice('分离服务连接出错，录音已保留。请检查服务后重试。', true); } };
     socket.onclose = () => { if (generation === state.generation && state.running) { stopCapture(); notice('分离服务连接已关闭，录音已保留。', true); } };
+    try {
+      await setNativeMeeting(true);
+    } catch (error) {
+      notice(`CABLE 输出未开启：${errorMessage(error)}`, true);
+    }
     resetRecording();
     state.running = true;
     captureHealth.startedAt = captureHealth.resultAt = performance.now();
@@ -924,9 +929,11 @@ async function setNativeMeeting(enabled) {
   if (enabled) {
     if (state.meetingActive) disableMeeting();
     $('meetingToggle').checked = false;
+    $('cableStatus').textContent = status.device || 'CABLE Input';
     setText($('meetingHint'), 'CABLE 直连已启用：{device}（服务端直接写入，绕过浏览器播放）', { device: status.device || 'CABLE Input' });
   } else {
-    setText($('meetingHint'), 'CABLE 直连已关闭；可继续使用上面的浏览器会议输出。');
+    $('cableStatus').textContent = '未连接';
+    setText($('meetingHint'), 'CABLE 输出已关闭。');
   }
   updateButtons();
 }
