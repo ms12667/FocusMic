@@ -49,13 +49,20 @@ class NativePipeline:
     def run(self, duration: float | None = None):
         if self.runtime is None:
             self.load()
-        self.audio.start()
-        self.mouth.start()
-        # Align the file-backed video timeline with the audio clock.
-        if hasattr(self.mouth, "align_to"):
-            self.mouth.align_to(self.audio.start_time)
-        if self.output is not None:
-            self.output.start()
+        try:
+            self.audio.start()
+            self.mouth.start()
+            # Align the file-backed video timeline with the audio clock.
+            if hasattr(self.mouth, "align_to"):
+                self.mouth.align_to(self.audio.start_time)
+            if self.output is not None:
+                self.output.start()
+        except Exception:
+            if self.output is not None:
+                self.output.stop()
+            self.mouth.stop()
+            self.audio.stop()
+            raise
         self.running = True
         session_epoch = int(self.audio.total)
         end = session_epoch + self.hop + GUARD

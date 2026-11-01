@@ -31,10 +31,18 @@ def resolve_input(sd, spec: str | int | None) -> tuple[int, dict]:
         raise RuntimeError("没有可用的录音设备。")
     if spec is None or spec == "":
         wanted = sd.default.device[0]
-        for d in devices:
-            if d["index"] == wanted:
-                return d["index"], d
-        return devices[0]["index"], devices[0]
+        # Prefer a physical WASAPI endpoint at 48 kHz over MME/DirectSound
+        # duplicates, and never default to a virtual cable/Steam mic.
+        physical = [d for d in devices
+                    if "CABLE" not in d["name"].upper() and "STEAM" not in d["name"].upper()]
+        pool = physical or devices
+        pool.sort(key=lambda d: (
+            "WASAPI" not in d["hostapi"],
+            abs(d["samplerate"] - 48000.0),
+            d["index"] != wanted,
+            d["index"],
+        ))
+        return pool[0]["index"], pool[0]
     if isinstance(spec, int) or str(spec).isdigit():
         idx = int(spec)
         for d in devices:

@@ -11,6 +11,12 @@ import argparse
 import sys
 from pathlib import Path
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 PROBE = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROBE / "Falcon" / "studio"))
 
