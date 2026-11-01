@@ -28,7 +28,7 @@ const state = {
   trackingMode: 'auto', trackingStatus: 'idle', trackingEpoch: 0, inferenceEpoch: 0,
   lips: [], trackingMessage: '', detectionMs: null, requiresReacquire: false, searching: false,
   bitmapBusy: false, bitmapTimeout: null,
-  playbackUpsampler: null, avOffsetMs: 30, lastPlaybackInfo: null,
+  playbackUpsampler: null, avOffsetMs: 30, lastPlaybackInfo: null, nativeMeeting: false,
 };
 const cropCanvas = document.createElement('canvas');
 cropCanvas.width = cropCanvas.height = 96;
@@ -102,8 +102,9 @@ function updateButtons() {
   $('loadButton').disabled = state.status.ready || state.status.loading || state.loading;
   setText($('loadButton').querySelector('span'), state.status.ready ? '模型已就绪' : state.status.loading || state.loading ? '正在加载模型…' : '加载本地模型');
   $('modelSelect').disabled = state.running || state.starting || state.loading || !!state.status.loading;
-  $('meetingSelect').disabled = !state.stream || state.meetingActive || !state.meetingOutputs.length;
-  $('meetingToggle').disabled = !state.stream || !state.meetingOutputs.length || !('setSinkId' in HTMLMediaElement.prototype);
+  $('meetingSelect').disabled = !state.stream || state.meetingActive || state.nativeMeeting || !state.meetingOutputs.length;
+  $('meetingToggle').disabled = state.nativeMeeting || !state.stream || !state.meetingOutputs.length || !('setSinkId' in HTMLMediaElement.prototype);
+  $('nativeMeetingToggle').disabled = !state.stream || state.opening || state.meetingActive;
   $('sessionLight').classList.toggle('running', state.running && trackingAllowsInference());
   setText($('captureLabel'), state.running ? trackingAllowsInference() ? '正在分离' : '等待目标' : '设备预览');
   $('captureLabel').parentElement.classList.toggle('running', state.running && trackingAllowsInference());
@@ -907,6 +908,28 @@ function disableMeeting() {
   setText($('meetingHint'), '会议输出已关闭；启用后将分离声音发送至所选虚拟声卡。');
   updateButtons();
 }
+async function setNativeMeeting(enabled) {
+  const response = await fetch('/api/meeting', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: Boolean(enabled) }), signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try { detail = (await response.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  const status = await response.json();
+  state.nativeMeeting = Boolean(enabled);
+  $('nativeMeetingToggle').checked = state.nativeMeeting;
+  if (enabled) {
+    if (state.meetingActive) disableMeeting();
+    $('meetingToggle').checked = false;
+    setText($('meetingHint'), 'CABLE 直连已启用：{device}（服务端直接写入，绕过浏览器播放）', { device: status.device || 'CABLE Input' });
+  } else {
+    setText($('meetingHint'), 'CABLE 直连已关闭；可继续使用上面的浏览器会议输出。');
+  }
+  updateButtons();
+}
 // Stopping must not swallow the last words: the newest ~0.6-1.1 s is not separated yet
 // (the window in flight, the samples since the last 0.2 s hop and the 80 ms right context).
 // Pad it with silence and the last mouth frame, separate the remaining windows in order,
@@ -990,6 +1013,7 @@ function stopCapture() {
   }
   stopMonitoring();
   disableMeeting();
+  if (state.nativeMeeting) void setNativeMeeting(false).catch(() => {});
   state.monitorGain?.disconnect();
   state.meetingGain?.disconnect();
   state.makeupGain?.disconnect();
@@ -1148,8 +1172,18 @@ $('modelSelect').addEventListener('change', async () => {
   await loadModel(state.requestedVariant).catch(() => {});
 });
 $('meetingToggle').addEventListener('change', () => {
+  if (state.nativeMeeting) { $('meetingToggle').checked = false; return; }
   if ($('meetingToggle').checked) void enableMeeting();
   else { disableMeeting(); if (!$('monitorToggle').checked) stopMonitoring(); }
+});
+$('nativeMeetingToggle').addEventListener('change', () => {
+  const enabled = $('nativeMeetingToggle').checked;
+  setNativeMeeting(enabled).catch((error) => {
+    $('nativeMeetingToggle').checked = !enabled;
+    state.nativeMeeting = false;
+    notice(errorMessage(error), true);
+    updateButtons();
+  });
 });
 $('meetingPlayer').addEventListener('error', () => {
   if (state.meetingActive) { disableMeeting(); notice('虚拟声卡输出失败，已关闭会议输出。请重新选择虚拟设备。', true); }

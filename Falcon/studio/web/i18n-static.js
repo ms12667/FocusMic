@@ -122,5 +122,7 @@ export default {
   "快速上手": "A LITTLE GUIDANCE",
   "音画同步偏移": "A/V sync offset",
   "画面比声音慢时调正，反之调负": "Increase if the video lags the audio; decrease if it leads.",
-  "监听延迟（不含 CABLE / Discord）": "Monitor latency (excludes CABLE / Discord)"
+  "监听延迟（不含 CABLE / Discord）": "Monitor latency (excludes CABLE / Discord)",
+  "CABLE 直连（低延迟）": "Native CABLE output (low latency)",
+  "由服务端直接写 CABLE Input": "Server writes directly to CABLE Input"
 };

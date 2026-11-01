@@ -24,6 +24,8 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from native_output import CableOutput
+
 ROOT = Path(__file__).resolve().parent
 SR, FPS, WINDOW, HOP = 16000, 25, 32000, 3200
 GUARD, FADE = 1280, 320  # 80 ms right context, 20 ms prediction crossfade
@@ -101,6 +103,7 @@ class Engine:
         self.load_lock = threading.Lock()
         self.infer_lock = threading.Lock()
         self.load_thread = None
+        self.meeting = CableOutput(gain=2.0, blocksize=960, prebuffer=1, max_queue=4)
 
     def status(self):
         from falcon_runtime import VARIANTS
@@ -113,6 +116,7 @@ class Engine:
         if self.runtime is not None:
             status.update(self.runtime.status())
             status.update(loading=self.loading, error=self.error, busy=self.busy, variant=self.variant, ready=not self.loading and bool(status["ready"]))
+        status["native_meeting"] = self.meeting.status()
         return status
 
     @staticmethod
@@ -170,6 +174,15 @@ class Engine:
         finally:
             self.busy = False
             self.infer_lock.release()
+
+    def start_meeting(self):
+        if self.active_connections > 1:
+            raise RuntimeError("只能有一个活动页面启用 CABLE 直连输出。")
+        return self.meeting.start()
+
+    def stop_meeting(self):
+        self.meeting.stop()
+        return self.meeting.status()
 
 
 def same_origin(origin: str | None, host: str | None) -> bool:
@@ -230,6 +243,28 @@ def create_app(engine=None, autoload=True):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return engine.status()
 
+    @app.post("/api/meeting")
+    async def meeting(request: Request):
+        raw = await request.body()
+        if len(raw) > 1024:
+            raise HTTPException(status_code=413, detail="会议输出请求过大。")
+        try:
+            payload = json.loads(raw) if raw else {}
+            if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
+                raise ValueError("会议输出请求必须包含布尔值 enabled。")
+            if payload["enabled"]:
+                result = await asyncio.to_thread(engine.start_meeting)
+            else:
+                result = await asyncio.to_thread(engine.stop_meeting)
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            log.exception("Native CABLE output failed")
+            raise HTTPException(status_code=500, detail=f"CABLE 输出启动失败：{exc}") from exc
+        return result
+
     @app.websocket("/ws")
     async def websocket(ws: WebSocket):
         if not same_origin(ws.headers.get("origin"), ws.headers.get("host")):
@@ -259,6 +294,10 @@ def create_app(engine=None, autoload=True):
                         raise RuntimeError("模型忙，请跳过此窗口后重试。")
                     prediction, inference_ms = await asyncio.to_thread(engine.infer, audio, frames)
                     output, contiguous, clipped = slicer.take(prediction, endpoint, data.get("reset", False))
+                    if data.get("reset", False):
+                        engine.meeting.reset()
+                    if engine.meeting.active:
+                        engine.meeting.push(output)
                     await ws.send_json({"type": "result", "id": request_id,
                         "audio": base64.b64encode(output.tobytes()).decode("ascii"), "sample_rate": SR,
                         "inference_ms": round(inference_ms, 1), "rtf": round(inference_ms / (HOP * 1000 / SR), 3),
@@ -274,6 +313,8 @@ def create_app(engine=None, autoload=True):
             pass
         finally:
             engine.active_connections -= 1
+            if engine.active_connections <= 0:
+                await asyncio.to_thread(engine.meeting.stop)
 
     @app.get("/")
     async def index():
