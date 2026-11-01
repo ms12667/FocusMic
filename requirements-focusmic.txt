@@ -1,0 +1,15 @@
+# FocusMic native runtime, verified on Windows 11 / Python 3.12 / RTX 5070 Ti.
+# CUDA torch must come from the CUDA 12.8 wheel index:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.9.1+cu128
+torch==2.9.1+cu128
+numpy==2.5.4
+PySide6-Essentials==6.12.0
+mediapipe==1.2.0
+opencv-contrib-python==5.0.0.93
+sounddevice==0.5.6
+soxr==1.1.0
+soundfile==0.14.0
+keyboard==0.13.5
+PyYAML==6.0.3
+einops==0.8.2
+Pillow==13.0.0

@@ -9,9 +9,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .paths import mediapipe_model
+
 CROP = 96
 FPS = 25
-HAND_MODEL = Path(__file__).resolve().parent.parent / "Falcon" / "studio" / "web" / "vendor" / "mediapipe" / "hand_landmarker.task"
+HAND_MODEL = mediapipe_model("hand_landmarker.task")
 OUTER_LIP_INDICES = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375,
                      291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
 

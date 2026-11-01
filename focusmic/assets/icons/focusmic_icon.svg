@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Focusmic app icon</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Excluded nearby speakers -->
+    <g fill="#9AA4B2" stroke="none">
+      <circle cx="43" cy="111" r="17"/>
+      <path d="M16 194c1-30 10-56 27-56s26 26 27 56c0 5-3 8-8 8H24c-5 0-8-3-8-8Z"/>
+      <circle cx="213" cy="111" r="17"/>
+      <path d="M186 194c1-30 10-56 27-56s26 26 27 56c0 5-3 8-8 8h-38c-5 0-8-3-8-8Z"/>
+    </g>
+    <g stroke="#E5484D" stroke-width="7" fill="none">
+      <path d="m31 169 24 24m0-24-24 24"/>
+      <path d="m201 169 24 24m0-24-24 24"/>
+    </g>
+    <!-- Focused speaker -->
+    <g fill="#FFB51B" stroke="none">
+      <circle cx="128" cy="59" r="24"/>
+      <path d="M77 203c2-52 19-106 51-106s49 54 51 106c0 7-4 11-11 11H88c-7 0-11-4-11-11Z"/>
+    </g>
+    <!-- Microphone in the foreground -->
+    <g stroke="#263244" stroke-width="6" fill="none">
+      <path d="M106 171v10c0 15 10 25 22 25s22-10 22-25v-10"/>
+      <path d="M128 206v15"/>
+      <path d="M114 225h28"/>
+    </g>
+    <rect x="116" y="143" width="24" height="49" rx="12" fill="#263244"/>
+  </g>
+</svg>

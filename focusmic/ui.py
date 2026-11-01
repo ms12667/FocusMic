@@ -1,0 +1,380 @@
+"""Minimal PySide6 window for the native FocusMic pipeline."""
+from __future__ import annotations
+
+import logging
+import threading
+
+import cv2
+import sounddevice as sd
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QMainWindow, QMenu, QPlainTextEdit, QPushButton, QSlider, QSpinBox,
+    QSystemTrayIcon, QVBoxLayout, QWidget,
+)
+
+from .audio import LiveAudio, list_input_devices, resolve_input
+from .config import Settings, load_settings, save_settings
+from .paths import icon_path, mediapipe_model
+from .pipeline import NativePipeline
+from .video import MouthTracker
+
+MEDIAPIPE_MODEL = mediapipe_model("face_landmarker.task")
+ICON = icon_path()
+
+
+class MainWindow(QMainWindow):
+    log_signal = Signal(str)
+    hotkey_signal = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.settings: Settings = load_settings()
+        self.setWindowTitle("FocusMic")
+        self.setWindowIcon(QIcon(str(ICON)))
+        self.resize(self.settings.window_width, self.settings.window_height)
+        self.pipeline = None
+        self.tracker = None
+        self.worker = None
+        self.last_log = ""
+        self._last_bypass = False
+        self.mic_devices = []
+        self._build()
+        self._apply_settings()
+        self.log_signal.connect(self._append_log)
+        self.hotkey_signal.connect(self._toggle_bypass_from_hotkey)
+        self._hotkey = None
+        self._setup_tray()
+        self._setup_hotkey()
+        self.timer = QTimer(self)
+        self.timer.setInterval(50)
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start()
+
+    def _append_log(self, text: str):
+        self.log.appendPlainText(text)
+        logging.getLogger("focusmic").info(text)
+
+    def _apply_settings(self):
+        if self.settings.mic_name:
+            for i, d in enumerate(self.mic_devices):
+                if d["name"] == self.settings.mic_name:
+                    self.mic.setCurrentIndex(i)
+                    break
+        self.camera.setValue(self.settings.camera)
+        self.model.setCurrentIndex(1 if self.settings.variant == "big" else 0)
+        self.av.setValue(self.settings.av_offset_ms)
+        self.monitor.setChecked(self.settings.monitor)
+
+    def _store_settings(self):
+        idx = self.mic.currentData()
+        for d in self.mic_devices:
+            if d["index"] == idx:
+                self.settings.mic_name = d["name"]
+                break
+        self.settings.camera = self.camera.value()
+        self.settings.variant = "big" if self.model.currentIndex() == 1 else "small"
+        self.settings.av_offset_ms = self.av.value()
+        self.settings.monitor = self.monitor.isChecked()
+        self.settings.window_width = self.width()
+        self.settings.window_height = self.height()
+        try:
+            save_settings(self.settings)
+        except OSError as exc:
+            logging.getLogger("focusmic").warning("save settings failed: %s", exc)
+
+    def _build(self):
+        root = QWidget()
+        self.setCentralWidget(root)
+        layout = QHBoxLayout(root)
+
+        self.preview = QLabel("摄像头预览")
+        self.preview.setAlignment(Qt.AlignCenter)
+        self.preview.setMinimumSize(760, 428)
+        self.preview.setStyleSheet("background:#0b0f14;color:#7a8494;border-radius:10px;")
+        layout.addWidget(self.preview, 3)
+
+        side = QVBoxLayout()
+        layout.addLayout(side, 2)
+
+        form_box = QGroupBox("输入")
+        form = QFormLayout(form_box)
+        self.mic = QComboBox()
+        self.mic_devices = list_input_devices(sd)
+        for d in self.mic_devices:
+            self.mic.addItem(f"[{d['index']}] {d['name']} ({d['hostapi']})", d["index"])
+        try:
+            default_idx, _ = resolve_input(sd, None)
+            pos = self.mic.findData(default_idx)
+            if pos >= 0:
+                self.mic.setCurrentIndex(pos)
+        except Exception:
+            pass
+        form.addRow("麦克风", self.mic)
+        self.camera = QSpinBox()
+        self.camera.setRange(0, 8)
+        form.addRow("摄像头索引", self.camera)
+        self.model = QComboBox()
+        self.model.addItems(["Falcon Small", "Falcon Big"])
+        form.addRow("模型", self.model)
+        side.addWidget(form_box)
+
+        out_box = QGroupBox("输出")
+        out_layout = QVBoxLayout(out_box)
+        self.cable = QLabel("CABLE Input：未启动")
+        self.cable.setWordWrap(True)
+        out_layout.addWidget(self.cable)
+        self.monitor = QCheckBox("耳机监听（启动前选择）")
+        self.monitor.setChecked(False)
+        out_layout.addWidget(self.monitor)
+        self.hint = QLabel("Discord/游戏麦克风选 CABLE Output；关闭其降噪、AGC、回声消除。")
+        self.hint.setWordWrap(True)
+        self.hint.setStyleSheet("color:#8b95a5;font-size:11px;")
+        out_layout.addWidget(self.hint)
+        side.addWidget(out_box)
+
+        cal_box = QGroupBox("音画同步")
+        cal = QVBoxLayout(cal_box)
+        self.av_value = QLabel("30 ms")
+        self.av = QSlider(Qt.Horizontal)
+        self.av.setRange(-250, 250)
+        self.av.setSingleStep(10)
+        self.av.setValue(30)
+        self.av.valueChanged.connect(lambda v: self.av_value.setText(f"{v} ms"))
+        cal.addWidget(self.av)
+        cal.addWidget(self.av_value)
+        side.addWidget(cal_box)
+
+        buttons = QHBoxLayout()
+        self.start_btn = QPushButton("开始")
+        self.start_btn.clicked.connect(self.start)
+        self.stop_btn = QPushButton("停止")
+        self.stop_btn.clicked.connect(self.stop)
+        self.stop_btn.setEnabled(False)
+        self.reacquire_btn = QPushButton("重新锁定")
+        self.reacquire_btn.clicked.connect(self.reacquire)
+        self.reacquire_btn.setEnabled(False)
+        self.bypass_btn = QPushButton("旁路：关")
+        self.bypass_btn.setCheckable(True)
+        self.bypass_btn.setEnabled(False)
+        self.bypass_btn.toggled.connect(self.toggle_bypass)
+        buttons.addWidget(self.start_btn)
+        buttons.addWidget(self.stop_btn)
+        buttons.addWidget(self.reacquire_btn)
+        buttons.addWidget(self.bypass_btn)
+        side.addLayout(buttons)
+
+        self.stats = QLabel("—")
+        self.stats.setWordWrap(True)
+        self.stats.setStyleSheet("font-family:Consolas,monospace;color:#b7c0cc;")
+        side.addWidget(self.stats)
+
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMaximumHeight(150)
+        side.addWidget(self.log)
+        side.addStretch(1)
+
+        self.setStyleSheet("""
+            QMainWindow, QWidget { background:#121821; color:#e7edf5; }
+            QGroupBox { border:1px solid #2a3442; border-radius:8px; margin-top:10px; padding:8px; }
+            QGroupBox::title { subcontrol-origin:margin; left:10px; padding:0 4px; color:#9aa6b5; }
+            QComboBox, QSpinBox, QPlainTextEdit { background:#0b0f14; border:1px solid #2a3442; border-radius:5px; padding:4px; }
+            QPushButton { background:#ffb51b; color:#131a23; border:none; border-radius:6px; padding:8px 14px; font-weight:600; }
+            QPushButton:disabled { background:#3a4350; color:#8892a0; }
+            QLabel { color:#dfe6ef; }
+        """)
+
+    def _setup_tray(self):
+        try:
+            self.tray = QSystemTrayIcon(QIcon(str(ICON)), self)
+            menu = QMenu()
+            show_action = QAction("显示 / 隐藏", self)
+            show_action.triggered.connect(lambda: self.hide() if self.isVisible() else self.showNormal())
+            menu.addAction(show_action)
+            start_action = QAction("开始分离", self)
+            start_action.triggered.connect(self.start)
+            menu.addAction(start_action)
+            stop_action = QAction("停止", self)
+            stop_action.triggered.connect(self.stop)
+            menu.addAction(stop_action)
+            bypass_action = QAction("切换旁路 (Ctrl+Alt+M)", self)
+            bypass_action.triggered.connect(self.bypass_btn.toggle)
+            menu.addAction(bypass_action)
+            menu.addSeparator()
+            quit_action = QAction("退出", self)
+            quit_action.triggered.connect(self.close)
+            menu.addAction(quit_action)
+            self.tray.setContextMenu(menu)
+            self.tray.setToolTip("FocusMic")
+            self.tray.activated.connect(
+                lambda reason: self.showNormal() if reason == QSystemTrayIcon.DoubleClick else None)
+            self.tray.show()
+        except Exception as exc:
+            self.tray = None
+            self.log_signal.emit(f"托盘不可用：{exc}")
+
+    def _setup_hotkey(self):
+        try:
+            import keyboard
+            self._keyboard = keyboard
+            self._hotkey = keyboard.add_hotkey("ctrl+alt+m", self.hotkey_signal.emit)
+            self.log_signal.emit("全局旁路热键：Ctrl+Alt+M")
+        except Exception as exc:
+            self._keyboard = None
+            self._hotkey = None
+            self.log_signal.emit(f"全局热键不可用：{exc}")
+
+    def _toggle_bypass_from_hotkey(self):
+        if self.pipeline is not None and self.worker is not None and self.worker.is_alive():
+            self.bypass_btn.setChecked(not self.bypass_btn.isChecked())
+
+    def toggle_bypass(self, checked: bool):
+        if self.pipeline is not None:
+            self.pipeline.manual_bypass = bool(checked)
+        self.bypass_btn.setText("旁路：开" if checked else "旁路：关")
+        self.log_signal.emit("手动旁路：" + ("开（原始麦克风）" if checked else "关（Falcon）"))
+
+    def start(self):
+        if self.worker and self.worker.is_alive():
+            return
+        mic_idx = self.mic.currentData()
+        camera = self.camera.value()
+        variant = "big" if self.model.currentIndex() == 1 else "small"
+        av = self.av.value()
+        monitor = self.monitor.isChecked()
+        self._store_settings()
+        try:
+            audio = LiveAudio(mic_idx)
+            self.tracker = MouthTracker(camera, model_path=MEDIAPIPE_MODEL)
+        except Exception as exc:
+            self.log_signal.emit(f"设备初始化失败：{exc}")
+            return
+        self.pipeline = NativePipeline(
+            audio, self.tracker, variant=variant, av_offset_ms=av,
+            gain_db=self.settings.gain_db, output=True, monitor=monitor,
+        )
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.reacquire_btn.setEnabled(True)
+        self.bypass_btn.setEnabled(True)
+        if self.bypass_btn.isChecked():
+            self.bypass_btn.setChecked(False)
+        self.mic.setEnabled(False)
+        self.camera.setEnabled(False)
+        self.model.setEnabled(False)
+        self.av.setEnabled(False)
+        self.monitor.setEnabled(False)
+        self.cable.setText("CABLE Input：启动中…")
+        self.log_signal.emit(f"启动：{self.mic.currentText()} / camera {camera} / {variant} / AV {av} ms")
+        self.worker = threading.Thread(target=self._run, daemon=True, name="pipeline")
+        self.worker.start()
+
+    def _run(self):
+        try:
+            self.pipeline.load("cuda")
+            self.log_signal.emit("模型就绪，开始分离")
+            self.pipeline.run()
+        except Exception as exc:
+            self.log_signal.emit(f"运行失败：{exc}")
+        finally:
+            self.log_signal.emit("已停止")
+
+    def reacquire(self):
+        if self.tracker is not None:
+            self.tracker.reset_target()
+            self.log_signal.emit("已清除目标，下一帧重新选择最大/最近人脸")
+
+    def stop(self):
+        if self.pipeline is not None:
+            self.pipeline.stop()
+        if self.worker is not None and self.worker.is_alive():
+            self.worker.join(timeout=3.0)
+        if self.tracker is not None:
+            self.tracker.stop()
+        self.pipeline = None
+        self.tracker = None
+        self.worker = None
+        self.stats.setText("—")
+        self._reset_buttons()
+
+    def _reset_buttons(self):
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.reacquire_btn.setEnabled(False)
+        self.bypass_btn.setEnabled(False)
+        if self.bypass_btn.isChecked():
+            self.bypass_btn.setChecked(False)
+        self.bypass_btn.setText("旁路：关")
+        self.mic.setEnabled(True)
+        self.camera.setEnabled(True)
+        self.model.setEnabled(True)
+        self.av.setEnabled(True)
+        self.monitor.setEnabled(True)
+        self.cable.setText("CABLE Input：已停止")
+        self.preview.clear()
+        self.preview.setText("摄像头预览")
+        self._last_bypass = False
+
+    def refresh(self):
+        if self.tracker is not None:
+            frame, box = self.tracker.preview_frame()
+            if frame is not None:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, _ = rgb.shape
+                image = QImage(rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+                if box is not None:
+                    painter = QPainter(image)
+                    painter.setRenderHint(QPainter.Antialiasing)
+                    painter.setPen(QPen(QColor("#35d07f"), 3))
+                    cx, cy, size = box
+                    side = size * min(w, h)
+                    x = cx * w - side / 2
+                    y = cy * h - side / 2
+                    painter.drawRect(int(x), int(y), int(side), int(side))
+                    painter.end()
+                pix = QPixmap.fromImage(image).scaled(
+                    self.preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.preview.setPixmap(pix)
+        if self.pipeline is not None:
+            s = self.pipeline.status()
+            cable = s["cable"]
+            if cable.get("active"):
+                self.cable.setText(f"CABLE Input：已连接（{cable.get('device','')}）")
+            elif cable.get("error"):
+                self.cable.setText(f"CABLE Input：错误 {cable['error']}")
+            self.stats.setText(
+                f"infer {s['infer_ms']:5.1f} ms | windows {s['windows']} | skip {s['skipped']} | "
+                f"tracked {s['tracked']*100:5.1f}% | lag {s['audio_lag']:5.2f}s | "
+                f"cable {cable.get('queued',0)}q/{cable.get('dropped',0)}drop"
+                f"{' | 直通' if s.get('bypass') else ''}"
+            )
+            bypass = bool(s.get("bypass"))
+            if bypass != self._last_bypass:
+                if bypass:
+                    reason = "手动旁路" if s.get("manual_bypass") else "视觉丢失"
+                    self.log_signal.emit(f"{reason}：已切换为原始麦克风直通")
+                else:
+                    self.log_signal.emit("已恢复 Falcon 分离输出")
+                self._last_bypass = bypass
+            if not s["running"] and self.worker is not None and not self.worker.is_alive():
+                if self.tracker is not None:
+                    self.tracker.stop()
+                self.tracker = None
+                self.pipeline = None
+                self.worker = None
+                self.stats.setText("—")
+                self._reset_buttons()
+
+    def closeEvent(self, event):
+        self.stop()
+        self._store_settings()
+        if self._hotkey is not None and self._keyboard is not None:
+            try:
+                self._keyboard.remove_hotkey(self._hotkey)
+            except Exception:
+                pass
+        if getattr(self, "tray", None) is not None:
+            self.tray.hide()
+        event.accept()

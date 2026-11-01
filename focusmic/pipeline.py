@@ -1,20 +1,15 @@
 """Windowed Falcon inference loop for the native app."""
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-PROBE = Path(__file__).resolve().parents[1]
-STUDIO = PROBE / "Falcon" / "studio"
-if str(STUDIO) not in sys.path:
-    sys.path.insert(0, str(STUDIO))
-
-from falcon_runtime import FalconRuntime, WINDOW_SAMPLES  # noqa: E402
-from native_output import CableOutput  # noqa: E402
-from native.monitor import MonitorOutput  # noqa: E402
+from .monitor import MonitorOutput
+from .output import CableOutput
+from .paths import weight_path
+from .vendor.falcon.falcon_runtime import FalconRuntime, WINDOW_SAMPLES
 
 WINDOW = WINDOW_SAMPLES
 FPS = 25
@@ -51,7 +46,7 @@ class NativePipeline:
         self.last_effective_bypass = False
 
     def load(self, device="cuda"):
-        weights = PROBE / "weights" / ("falcon-big.pt" if self.variant == "big" else "falcon.pt")
+        weights = weight_path(self.variant)
         self.runtime = FalconRuntime(self.variant, str(weights)).load(device)
         return self
 

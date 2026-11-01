@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d C:\ms12667\MSDev\FalconProbe
+cd /d "%~dp0"
 set PYTHONUTF8=1
-start "" .venv\Scripts\pythonw.exe native_ui.py
+start "" .venv\Scripts\pythonw.exe -m focusmic
 endlocal
