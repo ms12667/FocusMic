@@ -127,7 +127,7 @@ class NativePipeline:
                 raw = window[stop - self.hop:stop].copy()
                 mode_changed = False
                 if self.safe_mode:
-                    if tracked < 0.15:
+                    if tracked < 0.4:
                         lost_windows += 1
                         ok_windows = 0
                     else:

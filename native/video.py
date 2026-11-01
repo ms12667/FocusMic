@@ -11,6 +11,7 @@ import numpy as np
 
 CROP = 96
 FPS = 25
+HAND_MODEL = Path(__file__).resolve().parent.parent / "Falcon" / "studio" / "web" / "vendor" / "mediapipe" / "hand_landmarker.task"
 OUTER_LIP_INDICES = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375,
                      291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
 
@@ -52,16 +53,19 @@ class MouthTracker:
     """One camera thread; auto-locks the largest/nearest consistent face."""
 
     def __init__(self, camera: int = 0, width: int = 1280, height: int = 720,
-                 fps: int = FPS, model_path: str | Path | None = None):
+                 fps: int = FPS, model_path: str | Path | None = None,
+                 hand_model_path: str | Path | None = None):
         self.camera = int(camera)
         self.width = int(width)
         self.height = int(height)
         self.fps = int(fps)
         self.model_path = Path(model_path) if model_path else None
+        self.hand_model_path = Path(hand_model_path) if hand_model_path else HAND_MODEL
         self.frames = deque(maxlen=int(fps * 8))
         self.lock = threading.Lock()
         self.cap = None
         self.landmarker = None
+        self.hand_landmarker = None
         self.thread = None
         self._stop = threading.Event()
         self.last_crop = None
@@ -98,6 +102,18 @@ class MouthTracker:
             min_tracking_confidence=0.5,
         )
         self.landmarker = vision.FaceLandmarker.create_from_options(options)
+        if self.hand_model_path.is_file():
+            hand_options = vision.HandLandmarkerOptions(
+                base_options=python.BaseOptions(model_asset_path=str(self.hand_model_path)),
+                running_mode=vision.RunningMode.VIDEO,
+                num_hands=2,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+            self.hand_landmarker = vision.HandLandmarker.create_from_options(hand_options)
+        else:
+            self.hand_landmarker = None
         self.thread = threading.Thread(target=self._run, daemon=True, name="mouth-tracker")
         self.thread.start()
         return self
@@ -124,6 +140,29 @@ class MouthTracker:
                 return best
         return max(faces, key=lambda item: item[1][3])
 
+    @staticmethod
+    def _hand_covers_mouth(hand_result, cx, cy, side, w, h) -> bool:
+        if hand_result is None or not getattr(hand_result, "hand_landmarks", None):
+            return False
+        x0, x1 = cx - side / 2, cx + side / 2
+        y0, y1 = cy - side / 2, cy + side / 2
+        for hand in hand_result.hand_landmarks:
+            inside = 0
+            xs, ys = [], []
+            for p in hand:
+                px, py = p.x * w, p.y * h
+                xs.append(px)
+                ys.append(py)
+                if x0 <= px <= x1 and y0 <= py <= y1:
+                    inside += 1
+            # A few fingertips/knuckles inside the mouth square, or a hand box
+            # whose center sits over the mouth, means the lip cue is occluded.
+            if inside >= 3:
+                return True
+            if min(xs) <= cx <= max(xs) and min(ys) <= cy <= max(ys):
+                return True
+        return False
+
     def _run(self):
         from mediapipe.tasks.python import vision  # noqa: F401  (runtime import already done)
         while not self._stop.is_set():
@@ -145,13 +184,26 @@ class MouthTracker:
             tracked = False
             if chosen is not None:
                 L, geo = chosen
-                crop = crop_mouth(frame, L)
-                if crop is not None:
-                    tracked = True
-                    cx, cy, side, face_w = geo
-                    self.target_face = (cx, cy, face_w)
-                    self.target_width = face_w
-                    self.last_crop = crop
+                cx, cy, side, face_w = geo
+                occluded = False
+                if self.hand_landmarker is not None:
+                    try:
+                        hand_result = self.hand_landmarker.detect_for_video(
+                            mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
+                        occluded = self._hand_covers_mouth(hand_result, cx, cy, side, w, h)
+                    except Exception as exc:
+                        self.error = f"hand tracker: {exc}"
+                        self.hand_landmarker = None
+                if not occluded:
+                    crop = crop_mouth(frame, L)
+                    if crop is not None:
+                        tracked = True
+                        self.target_face = (cx, cy, face_w)
+                        self.target_width = face_w
+                        self.last_crop = crop
+                        self.preview_box = (cx / w, cy / h, side / min(w, h))
+                else:
+                    crop = self.last_crop
                     self.preview_box = (cx / w, cy / h, side / min(w, h))
             if crop is None:
                 crop = self.last_crop if self.last_crop is not None else np.zeros((CROP, CROP), np.uint8)
@@ -218,6 +270,9 @@ class MouthTracker:
         if self.landmarker is not None:
             self.landmarker.close()
             self.landmarker = None
+        if self.hand_landmarker is not None:
+            self.hand_landmarker.close()
+            self.hand_landmarker = None
 
 
 class SimMouth:

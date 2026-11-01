@@ -91,6 +91,12 @@ The window shows camera preview + mouth box, microphone/camera/model selection,
 CABLE Input status, optional headphone monitoring, A/V offset and live stats.
 Devices are only opened after clicking **开始**.
 
+Safe behavior: MediaPipe Hand Landmarker also runs on each camera frame; if a
+hand covers the mouth or the mouth cue is lost for ~0.6 s (tracked < 40%), the
+pipeline bypasses to the raw microphone and logs `直通`. It returns to Falcon
+after two tracked windows. `Ctrl+Alt+M` toggles manual bypass; the tray menu has
+show/hide, start/stop, bypass and quit. `重新锁定` clears the target face.
+
 ## Not included / excluded
 
 - `.venv/` (5+ GB)

@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self.tracker = None
         self.worker = None
         self.last_log = ""
+        self._last_bypass = False
         self._build()
         self.log_signal.connect(self.log.appendPlainText)
         self.hotkey_signal.connect(self._toggle_bypass_from_hotkey)
@@ -278,6 +279,7 @@ class MainWindow(QMainWindow):
         self.cable.setText("CABLE Input：已停止")
         self.preview.clear()
         self.preview.setText("摄像头预览")
+        self._last_bypass = False
 
     def refresh(self):
         if self.tracker is not None:
@@ -312,6 +314,14 @@ class MainWindow(QMainWindow):
                 f"cable {cable.get('queued',0)}q/{cable.get('dropped',0)}drop"
                 f"{' | 直通' if s.get('bypass') else ''}"
             )
+            bypass = bool(s.get("bypass"))
+            if bypass != self._last_bypass:
+                if bypass:
+                    reason = "手动旁路" if s.get("manual_bypass") else "视觉丢失"
+                    self.log_signal.emit(f"{reason}：已切换为原始麦克风直通")
+                else:
+                    self.log_signal.emit("已恢复 Falcon 分离输出")
+                self._last_bypass = bypass
             if not s["running"] and self.worker is not None and not self.worker.is_alive():
                 if self.tracker is not None:
                     self.tracker.stop()
