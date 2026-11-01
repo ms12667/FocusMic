@@ -32,6 +32,21 @@ def mouth_geometry(landmarks, width: int, height: int):
     return cx, cy, face_w * scale, face_w
 
 
+def lip_box(landmarks, width: int, height: int, margin: float = 0.25):
+    """Tight box around the lips, not the large nose/chin crop."""
+    pts = []
+    for i in (61, 291, 0, 17, 13, 14):
+        try:
+            pts.append((landmarks[i].x * width, landmarks[i].y * height))
+        except IndexError:
+            return None
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    dx, dy = (x1 - x0) * margin, (y1 - y0) * margin
+    return x0 - dx, y0 - dy, x1 + dx, y1 + dy
+
+
 def crop_mouth(frame: np.ndarray, landmarks) -> np.ndarray | None:
     h, w = frame.shape[:2]
     geo = mouth_geometry(landmarks, w, h)
@@ -77,6 +92,8 @@ class MouthTracker:
         self.last_time = None
         self.preview = None
         self.preview_box = None
+        self.occlusion_streak = 0
+        self.occluded = False
 
     def start(self):
         from mediapipe.tasks import python
@@ -141,12 +158,16 @@ class MouthTracker:
         return max(faces, key=lambda item: item[1][3])
 
     @staticmethod
-    def _hand_covers_mouth(hand_result, cx, cy, side, w, h) -> bool:
+    def _hand_covers_mouth(hand_result, box, w, h) -> bool:
         if hand_result is None or not getattr(hand_result, "hand_landmarks", None):
             return False
-        x0, x1 = cx - side / 2, cx + side / 2
-        y0, y1 = cy - side / 2, cy + side / 2
+        if box is None:
+            return False
+        x0, y0, x1, y1 = box
+        area = max(1.0, (x1 - x0) * (y1 - y0))
         for hand in hand_result.hand_landmarks:
+            if len(hand) < 21:
+                continue
             inside = 0
             xs, ys = [], []
             for p in hand:
@@ -155,11 +176,17 @@ class MouthTracker:
                 ys.append(py)
                 if x0 <= px <= x1 and y0 <= py <= y1:
                     inside += 1
-            # A few fingertips/knuckles inside the mouth square, or a hand box
-            # whose center sits over the mouth, means the lip cue is occluded.
+            # Require several actual hand landmarks inside the *lip* box, or a
+            # hand whose bounding box covers most of that box and whose palm
+            # sits over it. A hand merely near the large green crop no longer
+            # counts as occlusion.
+            palm = hand[9]
+            px, py = palm.x * w, palm.y * h
+            overlap = max(0.0, min(x1, max(xs)) - max(x0, min(xs))) * \
+                      max(0.0, min(y1, max(ys)) - max(y0, min(ys)))
             if inside >= 3:
                 return True
-            if min(xs) <= cx <= max(xs) and min(ys) <= cy <= max(ys):
+            if overlap / area >= 0.45 and x0 <= px <= x1 and y0 <= py <= y1:
                 return True
         return False
 
@@ -185,15 +212,19 @@ class MouthTracker:
             if chosen is not None:
                 L, geo = chosen
                 cx, cy, side, face_w = geo
-                occluded = False
+                raw_occluded = False
                 if self.hand_landmarker is not None:
                     try:
                         hand_result = self.hand_landmarker.detect_for_video(
                             mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
-                        occluded = self._hand_covers_mouth(hand_result, cx, cy, side, w, h)
+                        raw_occluded = self._hand_covers_mouth(
+                            hand_result, lip_box(L, w, h), w, h)
                     except Exception as exc:
                         self.error = f"hand tracker: {exc}"
                         self.hand_landmarker = None
+                self.occlusion_streak = self.occlusion_streak + 1 if raw_occluded else 0
+                occluded = self.occlusion_streak >= 3
+                self.occluded = occluded
                 if not occluded:
                     crop = crop_mouth(frame, L)
                     if crop is not None:
@@ -205,6 +236,9 @@ class MouthTracker:
                 else:
                     crop = self.last_crop
                     self.preview_box = (cx / w, cy / h, side / min(w, h))
+            else:
+                self.occlusion_streak = 0
+                self.occluded = False
             if crop is None:
                 crop = self.last_crop if self.last_crop is not None else np.zeros((CROP, CROP), np.uint8)
             with self.lock:
@@ -257,6 +291,7 @@ class MouthTracker:
                 "seen": self.frames_seen,
                 "tracked": self.frames_tracked,
                 "fps": (self.frames_tracked / max(1, self.frames_seen)),
+                "occluded": self.occluded,
                 "error": self.error,
             }
 
