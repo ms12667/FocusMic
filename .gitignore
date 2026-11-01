@@ -1,0 +1,8 @@
+.venv/
+demo/
+testrecordings/
+*.log
+__pycache__/
+*.py[cod]
+Falcon/.git-upstream/
+Falcon/studio/__pycache__/
