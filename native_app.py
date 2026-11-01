@@ -61,6 +61,7 @@ def main():
     parser.add_argument("--gain-db", type=float, default=6.0)
     parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--no-output", action="store_true", help="不写 CABLE，只跑模型")
+    parser.add_argument("--monitor", action="store_true", help="同时输出到默认耳机/扬声器")
     parser.add_argument("--save-wav", default=None, help="把模型输出保存为 WAV")
     parser.add_argument("--simulate", action="store_true", help="用 testrecordings 回放，不碰麦克风/摄像头")
     parser.add_argument("--sim-audio", default=str(PROBE / "testrecordings" / "synth_adj_snr0_mix.wav"))
@@ -85,7 +86,8 @@ def main():
 
     pipeline = NativePipeline(
         audio, mouth, variant=args.variant, av_offset_ms=args.av_offset_ms,
-        gain_db=args.gain_db, output=not args.no_output, save_wav=args.save_wav,
+        gain_db=args.gain_db, output=not args.no_output, monitor=args.monitor,
+        save_wav=args.save_wav,
     )
     try:
         pipeline.load(args.device)

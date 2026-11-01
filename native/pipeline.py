@@ -14,6 +14,7 @@ if str(STUDIO) not in sys.path:
 
 from falcon_runtime import FalconRuntime, WINDOW_SAMPLES  # noqa: E402
 from native_output import CableOutput  # noqa: E402
+from native.monitor import MonitorOutput  # noqa: E402
 
 WINDOW = WINDOW_SAMPLES
 FPS = 25
@@ -24,7 +25,7 @@ FADE = 320
 
 class NativePipeline:
     def __init__(self, audio, mouth, *, variant="small", av_offset_ms=30.0,
-                 hop=3200, gain_db=6.0, output=True, save_wav=None):
+                 hop=3200, gain_db=6.0, output=True, monitor=False, save_wav=None):
         self.audio = audio
         self.mouth = mouth
         self.variant = variant
@@ -32,6 +33,7 @@ class NativePipeline:
         self.hop = int(hop)
         self.gain = float(10 ** (gain_db / 20.0))
         self.output = CableOutput(gain=self.gain, blocksize=960, prebuffer=1, max_queue=4) if output else None
+        self.monitor = MonitorOutput(gain=self.gain, blocksize=960, prebuffer=1, max_queue=4) if monitor else None
         self.save_wav = Path(save_wav) if save_wav else None
         self.runtime = None
         self.saved = []
@@ -40,6 +42,8 @@ class NativePipeline:
         self.windows = 0
         self.skipped = 0
         self.last_infer_ms = 0.0
+        self.last_tracked = 0.0
+        self.last_lag = 0.0
 
     def load(self, device="cuda"):
         weights = PROBE / "weights" / ("falcon-big.pt" if self.variant == "big" else "falcon.pt")
@@ -57,9 +61,13 @@ class NativePipeline:
                 self.mouth.align_to(self.audio.start_time)
             if self.output is not None:
                 self.output.start()
+            if self.monitor is not None:
+                self.monitor.start()
         except Exception:
             if self.output is not None:
                 self.output.stop()
+            if self.monitor is not None:
+                self.monitor.stop()
             self.mouth.stop()
             self.audio.stop()
             raise
@@ -76,7 +84,7 @@ class NativePipeline:
                     break
                 # Wait for enough audio, but do not fall behind: if the model
                 # cannot keep up, jump to the newest hop and drop stale windows.
-                while self.audio.total < end:
+                while self.running and self.audio.total < end:
                     if duration is not None and time.perf_counter() - started >= duration:
                         break
                     time.sleep(0.005)
@@ -96,6 +104,7 @@ class NativePipeline:
                 t0 = self.audio.time_at(start)
                 t1 = self.audio.time_at(end)
                 frames, tracked = self.mouth.frames_for(t0, t1, 50, self.av_offset_ms)
+                self.last_tracked = tracked
                 begin = time.perf_counter()
                 pred = self.runtime.infer(np.ascontiguousarray(window, dtype=np.float32),
                                           np.ascontiguousarray(frames, dtype=np.uint8))
@@ -109,6 +118,8 @@ class NativePipeline:
                 last_end = end
                 if self.output is not None:
                     self.output.push(chunk)
+                if self.monitor is not None:
+                    self.monitor.push(chunk)
                 if self.save_wav is not None:
                     self.saved.append(chunk.copy())
                 self.windows += 1
@@ -117,6 +128,7 @@ class NativePipeline:
                 if now - last_report >= 1.0:
                     last_report = now
                     lag = (self.audio.total - end) / 16000.0
+                    self.last_lag = lag
                     out = self.output.status() if self.output is not None else {"active": False}
                     print(f"infer {self.last_infer_ms:5.1f} ms | windows {self.windows} | "
                           f"skip {self.skipped} | audio lag {lag:5.2f}s | "
@@ -129,6 +141,8 @@ class NativePipeline:
             self.running = False
             if self.output is not None:
                 self.output.stop()
+            if self.monitor is not None:
+                self.monitor.stop()
             self.mouth.stop()
             self.audio.stop()
             if self.save_wav is not None and self.saved:
@@ -136,6 +150,20 @@ class NativePipeline:
                 y = np.concatenate(self.saved)
                 sf.write(str(self.save_wav), y, 16000, subtype="PCM_16")
                 print(f"saved {self.save_wav} ({len(y)/16000:.1f}s)", flush=True)
+
+    def status(self) -> dict:
+        cable = self.output.status() if self.output is not None else {"active": False}
+        monitor = self.monitor.status() if self.monitor is not None else {"active": False}
+        return {
+            "running": self.running,
+            "windows": self.windows,
+            "skipped": self.skipped,
+            "infer_ms": self.last_infer_ms,
+            "tracked": self.last_tracked,
+            "audio_lag": self.last_lag,
+            "cable": cable,
+            "monitor": monitor,
+        }
 
     def stop(self):
         self.running = False

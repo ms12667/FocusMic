@@ -71,6 +71,8 @@ class MouthTracker:
         self.frames_seen = 0
         self.frames_tracked = 0
         self.last_time = None
+        self.preview = None
+        self.preview_box = None
 
     def start(self):
         from mediapipe.tasks import python
@@ -146,10 +148,11 @@ class MouthTracker:
                 crop = crop_mouth(frame, L)
                 if crop is not None:
                     tracked = True
-                    cx, cy, _, face_w = geo
+                    cx, cy, side, face_w = geo
                     self.target_face = (cx, cy, face_w)
                     self.target_width = face_w
                     self.last_crop = crop
+                    self.preview_box = (cx / w, cy / h, side / min(w, h))
             if crop is None:
                 crop = self.last_crop if self.last_crop is not None else np.zeros((CROP, CROP), np.uint8)
             with self.lock:
@@ -158,6 +161,7 @@ class MouthTracker:
                 if tracked:
                     self.frames_tracked += 1
                 self.last_time = now
+                self.preview = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
             # Keep the camera at ~25 fps even if the driver runs faster.
             time.sleep(max(0.0, 1.0 / self.fps - (time.perf_counter() - now)))
 
@@ -180,6 +184,12 @@ class MouthTracker:
             if frames[j][2] and abs(stamps[j] - t) <= 0.2:
                 tracked += 1
         return out, tracked / count
+
+    def preview_frame(self):
+        with self.lock:
+            frame = None if self.preview is None else self.preview.copy()
+            box = self.preview_box
+        return frame, box
 
     def status(self) -> dict:
         with self.lock:
