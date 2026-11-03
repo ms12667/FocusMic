@@ -95,6 +95,7 @@ class InfoTile(QFrame):
 
 def _muted(text: str, theme: Theme, size: int = 11) -> QLabel:
     label = QLabel(text)
+    label.setTextFormat(Qt.PlainText)
     label.setWordWrap(True)
     label.setStyleSheet(f"color:{theme.muted};font-size:{size}px;")
     return label
