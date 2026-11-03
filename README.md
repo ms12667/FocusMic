@@ -46,6 +46,11 @@ focusmic/                   native app package
   pipeline.py               window scheduler + Falcon + safe bypass
   monitor.py / output.py    headphone and CABLE outputs
   config.py / paths.py      settings, assets, logs, weights lookup
+  ui.py                     sidebar tabs, Home / Performance / About
+  charts.py / metrics.py    QPainter line charts + CPU/GPU/RAM sampling
+  icons.py / theme.py       SVG icons, morphing controls, light/dark tokens
+  settings_dialog.py        startup, theme, hotkey and gain settings
+  pagehost.py               slide-and-fade page transitions
   vendor/falcon/            vendored Falcon inference (Apache-2.0)
   assets/                   app icon + MediaPipe face/hand models
 weights/                    falcon.pt, falcon-big.pt (Apache-2.0)
@@ -83,6 +88,24 @@ The live command uses the microphone and camera; the simulate command only
 reads files under `testrecordings/` and does not touch devices. The UI entry is
 `python -m focusmic` (or `FocusMic.bat`).
 
+## Native UI
+
+The window is designed around a 4:3 workspace (1080×810) with a slim sidebar:
+
+- **主页** — camera preview with mouth ROI, one-click start/stop, microphone,
+  camera, model, headphone monitoring, A/V offset, reacquire, manual bypass and
+  CABLE Input status.
+- **性能信息** — task-manager-style live charts for inference latency, system
+  CPU, GPU utilization and VRAM, plus current/avg/peak values.
+- **关于 FocusMic** — icon, version, developer, GitHub link, license credits
+  and build information.
+- **外观** — one-click dark/light toggle in the sidebar; Settings can follow
+  the system appearance. The icon set is Lucide (ISC); the sun/moon and page
+  transitions borrow the Morphicons interaction idea (MIT, not bundled).
+- **设置** — startup with Windows, follow-system theme, global bypass hotkey
+  enable/edit, output gain. Settings live in
+  `%APPDATA%\FocusMic\config.json`.
+
 Safe behavior: MediaPipe Hand Landmarker also runs on each camera frame; if a
 hand covers the mouth or the mouth cue is lost for ~0.6 s (tracked < 40%), the
 pipeline bypasses to the raw microphone and logs `直通`. It returns to Falcon
@@ -98,6 +121,7 @@ show/hide, start/stop, bypass and quit. `重新锁定` clears the target face.
 
 ## License / credits
 
-Falcon code and weights are Apache-2.0. VB-CABLE is a separate donationware
-driver and is not bundled. This project is not affiliated with the Falcon
-authors.
+FocusMic is Apache-2.0 (see `LICENSE` and `NOTICE`). Falcon code and weights
+are Apache-2.0. MediaPipe is Apache-2.0; Lucide is ISC; Simple Icons is CC0;
+PySide6 is LGPL-3.0. VB-CABLE is a separate donationware driver and is not
+bundled. This project is not affiliated with the Falcon authors.

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from PySide6.QtGui import QFont
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
@@ -16,6 +17,8 @@ SERVER_NAME = "FocusMic-single-instance"
 def main() -> int:
     log = setup_logging()
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setFont(QFont("Microsoft YaHei UI", 10))
     app.setApplicationName("FocusMic")
     app.setOrganizationName("FocusMic")
 

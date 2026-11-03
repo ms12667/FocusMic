@@ -34,6 +34,7 @@ class NativePipeline:
         self.runtime = None
         self.saved = []
         self.running = False
+        self.cancel = False
         self.error = None
         self.windows = 0
         self.skipped = 0
@@ -51,8 +52,12 @@ class NativePipeline:
         return self
 
     def run(self, duration: float | None = None):
+        if self.cancel:
+            return
         if self.runtime is None:
             self.load()
+        if self.cancel:
+            return
         try:
             self.audio.start()
             self.mouth.start()
@@ -71,6 +76,14 @@ class NativePipeline:
             self.mouth.stop()
             self.audio.stop()
             raise
+        if self.cancel:
+            if self.output is not None:
+                self.output.stop()
+            if self.monitor is not None:
+                self.monitor.stop()
+            self.mouth.stop()
+            self.audio.stop()
+            return
         self.running = True
         session_epoch = int(self.audio.total)
         end = session_epoch + self.hop + GUARD
@@ -204,4 +217,5 @@ class NativePipeline:
         }
 
     def stop(self):
+        self.cancel = True
         self.running = False

@@ -1,0 +1,31 @@
+FocusMic
+Copyright 2026 ms12667
+
+This product includes software and model weights developed by third parties:
+
+- Falcon / Falcon Studio, Copyright JusperLee and contributors, Apache-2.0.
+  https://github.com/JusperLee/Falcon
+  Vendored inference code is in focusmic/vendor/falcon/; model weights are
+  Apache-2.0 and are distributed separately/in weights/.
+
+- MediaPipe, Copyright Google LLC, Apache-2.0.
+  https://github.com/google-ai-edge/mediapipe
+  Face and hand landmarker task files are in focusmic/assets/mediapipe/.
+
+- Lucide icons, ISC License.
+  https://lucide.dev
+  SVG icons are in focusmic/assets/icons/lucide/.
+
+- Simple Icons (GitHub mark), CC0 1.0.
+  https://simpleicons.org
+
+- PySide6 / Qt, LGPL-3.0 (dynamic linking).
+  https://www.qt.io/qt-for-python
+
+- VB-CABLE is a separate donationware driver by VB-Audio; it is not bundled
+  with FocusMic. Users install it from the vendor.
+
+- Icon motion is inspired by Morphicons (MIT), a JavaScript morphing engine:
+  https://github.com/guillermolg00/morphicons
+  FocusMic implements a Qt-native crossfade/rotation in focusmic/icons.py and
+  does not bundle Morphicons runtime code.
