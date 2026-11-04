@@ -1,11 +1,9 @@
 .venv/
-demo/
 testrecordings/
+HANDOFF.md
 *.log
 __pycache__/
 *.py[cod]
-Falcon/.git-upstream/
-Falcon/studio/__pycache__/
 
 build/
 dist/

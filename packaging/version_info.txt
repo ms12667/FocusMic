@@ -14,11 +14,11 @@ VSVersionInfo(
       StringTable(
         '040904B0',
         [
-          StringStruct('CompanyName', 'ms12667'),
+          StringStruct('CompanyName', 'FocusMic'),
           StringStruct('FileDescription', 'FocusMic'),
           StringStruct('FileVersion', '0.1.0.0'),
           StringStruct('InternalName', 'FocusMic'),
-          StringStruct('LegalCopyright', 'Copyright (C) 2026 ms12667'),
+          StringStruct('LegalCopyright', 'Copyright (C) 2026 FocusMic contributors'),
           StringStruct('OriginalFilename', 'FocusMic.exe'),
           StringStruct('ProductName', 'FocusMic'),
           StringStruct('ProductVersion', '0.1.0.0'),

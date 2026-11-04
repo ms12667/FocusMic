@@ -5,7 +5,7 @@
 
 #define MyRuntimeName "FocusMic AI Runtime"
 #define MyRuntimeVersion "2.9.1-cu128"
-#define MyAppPublisher "ms12667"
+#define MyAppPublisher "FocusMic"
 #define MyAppURL "https://github.com/ms12667/FocusMic"
 
 [Setup]

@@ -1,98 +1,93 @@
-# FocusMic 0.1.0 — Windows release notes
+# FocusMic 0.1.0
 
-## Artifacts
+首个公开版本 · First public release.
 
-| Artifact | Size | Notes |
+FocusMic 用摄像头看嘴型、麦克风听声音，在本地把目标说话人的声音从同一房间的多人说话中分离出来。  
+FocusMic uses camera lip motion and microphone audio to extract the target speaker locally, even when other people in the room are talking.
+
+## 下载 / Downloads
+
+| 文件 / File | 大小 / Size | 用途 / Purpose |
 |---|---:|---|
-| `dist\installer\FocusMic-Setup-0.1.0.exe` | 234.6 MB (234,586,795 B) | main app, per-user, no admin |
-| `dist\installer\FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB (1,842,053,289 B) | PyTorch 2.9.1 + CUDA 12.8 runtime |
-| `dist\FocusMic\FocusMic.exe` | 19 MB | launcher inside the 586 MB portable folder |
+| `FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB | 先安装；PyTorch 2.9.1 + CUDA 12.8 运行时 / install first |
+| `FocusMic-Setup-0.1.0.exe` | 234.6 MB | 再安装；主程序 / install second |
+| `SHA256SUMS.txt` | 1 KB | 校验和 / checksums |
 
-Both installers are below GitHub's 2 GiB per-release-asset limit.
+两个安装包都是当前用户安装，不需要管理员权限。  
+Both installers are per-user and do not require administrator rights.
 
-SHA-256:
+## 中文
+
+### 安装顺序
+
+1. 安装 VB-CABLE 虚拟声卡（需单独下载）。
+2. 安装 `FocusMic-Runtime-2.9.1-cu128.exe`。
+3. 安装 `FocusMic-Setup-0.1.0.exe`。
+4. 首次启动选择麦克风和摄像头。
+5. 在语音/会议软件里把麦克风选为 **CABLE Output**，关闭其降噪、AGC 和回声消除。
+
+### 这个版本包含
+
+- 本地 Falcon 音视频目标说话人提取，Falcon Small 默认，Big 可选。
+- 摄像头预览、手动框选目标、重新锁定、手遮嘴/丢失目标自动直通。
+- 原生 CABLE 输出、耳机监听（跟随 Windows 当前默认播放设备）。
+- 性能信息、运行报告、中英双语关于页、深色/浅色主题。
+- 关闭窗口默认最小化到托盘，设置里可改为直接退出。
+- 麦克风按设备名 + host API 持久化；CABLE 输出、设备热插拔、首次向导。
+- 主程序不包含 PyTorch；运行时缺失时会显示安装引导，不会闪退。
+
+### 已知限制
+
+- 需要正脸和可见的嘴部；侧脸、遮挡、强逆光会影响效果。
+- 同音色、目标明显更轻、强混响仍然困难。
+- 端到端约 0.3–0.5 s（不含语音软件自身缓冲）。
+- 仅 Windows 10/11 x64 + NVIDIA CUDA 12.8。
+- VB-CABLE 不随应用分发；安装包未签名。
+- 麦克风为立体声时目前只取第 0 通道。
+
+## English
+
+### Install order
+
+1. Install the VB-CABLE virtual audio driver (separate download).
+2. Install `FocusMic-Runtime-2.9.1-cu128.exe`.
+3. Install `FocusMic-Setup-0.1.0.exe`.
+4. On first launch, select your microphone and camera.
+5. In your voice/meeting app, select **CABLE Output** as the microphone and
+   disable its noise suppression, AGC and echo cancellation.
+
+### What's in this release
+
+- Local Falcon audio-visual target speaker extraction; Falcon Small by default,
+  Big selectable.
+- Camera preview, manual target ROI, re-acquire, automatic bypass when the mouth
+  is covered or the target is lost.
+- Native CABLE output and headphone monitoring that follows the current Windows
+  default playback endpoint.
+- Performance page, run report, bilingual About page, dark/light themes.
+- Closing the window hides to the tray by default; Settings can make × quit.
+- Microphone persistence by device name + host API; CABLE output, device
+  hot-plug, first-run wizard.
+- PyTorch is not bundled; a missing runtime shows installation guidance instead
+  of crashing.
+
+### Known limitations
+
+- A frontal face and visible mouth are required; profile angles, occlusion and
+  strong backlight degrade the visual branch.
+- Similar voices, a much quieter target and strong reverberation remain hard.
+- End-to-end latency is about 0.3–0.5 s, excluding the receiving app's buffer.
+- Windows 10/11 x64 + NVIDIA CUDA 12.8 only.
+- VB-CABLE is not bundled; installers are unsigned.
+- Stereo microphones currently use channel 0 only.
+
+## 校验 / Checksums
 
 ```text
-1418b8de8b0eb5ba2d1f92a5d9c205310d8c2ae1846f9ccc03b97c3390c90b0f  FocusMic-Setup-0.1.0.exe
-4bc1c166e0caae9db4ced170b15e1614e9d813a0fa7d195eb1870d749a095ce9  FocusMic-Runtime-2.9.1-cu128.exe
+c6dee8313b5c97f1cc7532e758a946bab583db114a5abcf004d99ebba7687cd3  FocusMic-Setup-0.1.0.exe
+70470a027728523e83d293c8e58d1988d2053da569b4f296c59a1a901a623af6  FocusMic-Runtime-2.9.1-cu128.exe
 ```
 
-## Fixes in this build
-
-- Camera health monitoring no longer treats "tracker has not started yet" as a
-  dead camera thread. Previously the first metrics tick during model loading
-  stopped separation immediately.
-- Microphone selection now persists both the device name and host API
-  (MME/DirectSound/WASAPI/WDM-KS), so choosing a specific duplicate endpoint
-  survives restarts.
-- Closing the window now hides FocusMic to the tray by default. Settings has a
-  "关闭窗口时最小化到托盘" switch; turning it off makes the × button quit.
-- The stop button now uses a solid red danger style while separation is running.
-- Headphone monitoring now follows the Windows default playback endpoint
-  (`WASAPI default_output_device`), instead of arbitrarily choosing another
-  WASAPI endpoint such as the speakers. It also uses the endpoint's native
-  sample rate instead of forcing 48 kHz.
-
-## Why two installers
-
-PyTorch + CUDA is ~4.3 GB on disk and cannot fit a single GitHub release
-asset. The main app therefore excludes it; the runtime installer places it in
-`%LOCALAPPDATA%\FocusMic\runtime` and the app loads it from there after
-validating the Python ABI, PyTorch version, CUDA version and `_C` extension.
-
-## Requirements
-
-- Windows 10/11 x64
-- NVIDIA GPU with a working driver
-- Camera and microphone
-- VB-CABLE or an equivalent virtual audio cable for routing into voice/meeting software
-
-## Install
-
-1. Run `FocusMic-Runtime-2.9.1-cu128.exe` once. It installs to
-   `%LOCALAPPDATA%\FocusMic\runtime` and requires no administrator rights.
-2. Run `FocusMic-Setup-0.1.0.exe`. It installs to
-   `%LOCALAPPDATA%\Programs\FocusMic` and requires no administrator rights.
-3. Start FocusMic. If the runtime is missing, the home page shows a banner and
-   the start button opens an install dialog with a download link.
-4. In the voice/meeting app, select `CABLE Output` as the microphone and disable
-   its noise suppression / AGC / echo cancellation.
-
-The order can be reversed: the main app starts without the runtime and shows
-installation guidance.
-
-The executables are unsigned, so Windows SmartScreen may show a warning.
-
-## Offline verification
-
-```bat
-FocusMic.exe --selftest
-```
-
-Writes `%LOCALAPPDATA%\FocusMic\logs\selftest.log`. The release build passed
-with the external runtime:
-
-- runtime loaded from `%LOCALAPPDATA%\FocusMic\runtime`
-- PyTorch 2.9.1+cu128, CUDA 12.8 available
-- Falcon Small loaded on CUDA
-- face/hand task files and both weights present
-- one inference ≈ 70 ms
-
-Without the runtime, `--selftest` exits with code 1 and a clear Chinese error
-instead of crashing.
-
-Set `FOCUSMIC_RUNTIME` to an alternative directory to test an uninstalled
-runtime payload.
-
-## Known limitations
-
-- Installer UI is English; the application UI is Chinese.
-- Installers and app are unsigned.
-- The runtime installer must match the app's expected PyTorch/CUDA version.
-- Full-chain latency is an estimate and excludes the receiving app's own buffer.
-- Average suppression is an input/output RMS energy ratio, not a SIR/SI-SDR
-  measurement.
-- VB-CABLE is a separate driver and is not bundled.
-- Long-session A/V clock drift, stereo microphones where the target is not on
-  channel 0, and full camera-thread teardown during immediate app exit remain
-  known edge cases.
+完整说明请见仓库 README；使用前请阅读“已知限制”和“隐私”部分。  
+See the repository README for full details, requirements, performance numbers and
+privacy notes.

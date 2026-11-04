@@ -4,7 +4,7 @@
 
 #define MyAppName "FocusMic"
 #define MyAppVersion "0.1.0"
-#define MyAppPublisher "ms12667"
+#define MyAppPublisher "FocusMic"
 #define MyAppURL "https://github.com/ms12667/FocusMic"
 #define MyAppExeName "FocusMic.exe"
 

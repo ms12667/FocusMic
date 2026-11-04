@@ -1249,6 +1249,18 @@ class MainWindow(QMainWindow):
                 time.strftime("已保存 · %H:%M:%S"))
         self.log_signal.emit("设置已保存。")
 
+    def _about_card(self, title: str, body: str) -> QFrame:
+        card = QFrame()
+        card.setObjectName("Card")
+        box = QVBoxLayout(card)
+        box.setContentsMargins(18, 15, 18, 15)
+        box.setSpacing(7)
+        box.addWidget(_card_title(title, self.theme))
+        label = ThemedLabel(body, self.theme, role="muted", size=10, wrap=True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        box.addWidget(label)
+        return card
+
     def _build_about(self) -> QWidget:
         page = QWidget()
         layout = QHBoxLayout(page)
@@ -1266,54 +1278,132 @@ class MainWindow(QMainWindow):
         if not pix.isNull():
             icon.setPixmap(pix.scaled(92, 92, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         box.addWidget(icon)
-        name = ThemedLabel("FocusMic", self.theme, role="text", size=25, weight=600)
-        box.addWidget(name)
+        box.addWidget(ThemedLabel("FocusMic", self.theme, role="text", size=25, weight=600))
         box.addWidget(ThemedLabel(
-            f"版本 {__version__}", self.theme, role="muted", size=11))
-        box.addSpacing(10)
+            f"版本 {__version__} · Version {__version__}",
+            self.theme, role="muted", size=11))
+        box.addSpacing(8)
         box.addWidget(ThemedLabel(
-            "把镜头里的你，从房间的声音里留下来。",
+            "把镜头里的你，从房间的声音里留下来。\n"
+            "Keep the person on camera, not the whole room.",
             self.theme, role="text", size=12, wrap=True))
-        box.addSpacing(14)
-        for text in ("本地推理", "摄像头与麦克风不上传", "无遥测"):
+        box.addSpacing(12)
+        for text in ("本地推理 / Local inference",
+                     "画面与声音不上传 / No uploads",
+                     "无遥测 / No telemetry"):
             row = QHBoxLayout()
             row.setSpacing(7)
             dot = ThemedLabel("●", self.theme, role="teal", size=9)
             dot.setFixedWidth(10)
             row.addWidget(dot)
             row.addWidget(ThemedLabel(
-                text, self.theme, role="muted", size=11, wrap=True), 1)
+                text, self.theme, role="muted", size=10, wrap=True), 1)
             box.addLayout(row)
         box.addStretch(1)
         box.addWidget(ThemedLabel(
-            "Windows 10/11 · NVIDIA GPU", self.theme, role="faint", size=10))
+            "Windows 10/11 · NVIDIA GPU · CUDA 12.8",
+            self.theme, role="faint", size=10, wrap=True))
         layout.addWidget(brand)
 
-        right = QVBoxLayout()
-        right.setSpacing(12)
+        body = QWidget()
+        body.setStyleSheet("background:transparent;")
+        right = QVBoxLayout(body)
+        right.setContentsMargins(0, 0, 8, 0)
+        right.setSpacing(10)
 
-        dev = QFrame()
-        dev.setObjectName("Card")
-        dev_box = QVBoxLayout(dev)
-        dev_box.setContentsMargins(18, 16, 18, 16)
-        dev_box.setSpacing(6)
-        dev_box.addWidget(_card_title("开发者", self.theme))
-        dev_box.addWidget(ThemedLabel(
-            "ms12667", self.theme, role="text", size=14, weight=600))
-        dev_box.addWidget(LinkLabel(
-            "github.com/ms12667/FocusMic",
-            "https://github.com/ms12667/FocusMic", self.theme, size=12))
-        right.addWidget(dev)
+        right.addWidget(self._about_card(
+            "FocusMic 是什么 / What it is",
+            "FocusMic 是一个 Windows 本地的音视频目标说话人提取工具：摄像头看嘴型，"
+            "麦克风听声音，实时把你自己的声音从同一房间的多人说话中分离出来。\n\n"
+            "FocusMic is a local Windows audio-visual target speaker extraction app. "
+            "It uses lip motion from the camera and audio from the microphone to "
+            "isolate your voice from other people speaking in the same room, in real time."))
+
+        right.addWidget(self._about_card(
+            "效果 / What it does",
+            "保留你的声音，压低旁边人的说话声；手遮住嘴、离开画面或丢失目标时"
+            "自动直通原始麦克风，避免“没声音”。\n"
+            "Falcon Small 单窗推理约 65–85 ms；内部同音色干扰测试中，纯音频基线 "
+            "SIR 0.6 dB，口型路线 15.1 dB。实际效果取决于光照、正脸角度、"
+            "麦克风距离和房间混响。\n\n"
+            "Keeps your voice and suppresses nearby speakers. If your mouth is covered "
+            "or the target is lost, FocusMic falls back to the raw microphone so you are "
+            "never muted. Falcon Small inference is ~65–85 ms per 2 s window. In an "
+            "internal same-voice test, the audio-only baseline measured 0.6 dB SIR; the "
+            "lip-based route measured 15.1 dB. Real results depend on lighting, face "
+            "angle, mic distance and room acoustics."))
+
+        right.addWidget(self._about_card(
+            "和传统降噪的区别 / vs. noise suppression",
+            "传统降噪（RNNoise、Krisp、NVIDIA Broadcast 等）主要去除风扇、键盘、"
+            "稳态噪声，无法区分两个同时说话的人；很多实现会把旁边人的说话声"
+            "一起保留或一起压掉。\n"
+            "FocusMic 不靠“声音像不像噪声”，而是用画面里的嘴部运动锁定目标"
+            "说话人，所以舍友同时说话时仍能偏向你。它不是降噪器的替代品，"
+            "而是解决“多人同时说话”的问题。\n\n"
+            "Traditional noise suppression (RNNoise, Krisp, NVIDIA Broadcast, etc.) "
+            "removes fans, keyboards and stationary noise, but cannot tell two "
+            "concurrent talkers apart. FocusMic uses visual lip motion to identify the "
+            "target speaker, so it can favor you even when a roommate talks at the same "
+            "time. It solves concurrent-speech separation, not just noise."))
+
+        right.addWidget(self._about_card(
+            "运行环境 / Requirements",
+            "Windows 10/11 x64；NVIDIA 显卡与支持 CUDA 12.8 的驱动；摄像头；"
+            "麦克风；VB-CABLE 虚拟声卡。\n"
+            "磁盘：主程序约 590 MB，AI 运行时约 4.3 GB；显存：Small 约 384 MB，"
+            "Big 约 567 MB；建议 8 GB 以上内存。\n\n"
+            "Windows 10/11 x64; NVIDIA GPU with a CUDA 12.8-capable driver; camera; "
+            "microphone; VB-CABLE. Disk: app ~590 MB, runtime ~4.3 GB. VRAM: ~384 MB "
+            "(Small) / ~567 MB (Big). 8 GB+ RAM recommended."))
+
+        right.addWidget(self._about_card(
+            "性能开销 / Performance",
+            "测试机：RTX 5070 Ti Laptop 12 GB + Ryzen 9 7945HX。\n"
+            "Falcon Small：约 67.6 ms/窗，0.2 s 步长时 GPU 约 31%；"
+            "Falcon Big：约 74.8 ms/窗。\n"
+            "MediaPipe 口型跟踪约 10.8 ms/帧，25 fps 下约单核 27%。\n"
+            "端到端约 0.3–0.5 s（不含语音/会议软件自身缓冲）；"
+            "全链路延迟在应用内实时显示。\n\n"
+            "Tested on RTX 5070 Ti Laptop 12 GB + Ryzen 9 7945HX. Falcon Small: "
+            "~67.6 ms per window, ~31% GPU at a 0.2 s hop; Falcon Big: ~74.8 ms. "
+            "MediaPipe mouth tracking: ~10.8 ms/frame, ~27% of one CPU core at 25 fps. "
+            "End-to-end latency is roughly 0.3–0.5 s, excluding the receiving app's "
+            "buffer; the in-app full-chain estimate is shown live."))
+
+        right.addWidget(self._about_card(
+            "快速上手 / Quick start",
+            "1. 安装 VB-CABLE。\n"
+            "2. 先安装 FocusMic-Runtime，再安装 FocusMic。\n"
+            "3. 首次向导选择麦克风和摄像头；正对镜头，保证嘴部可见。\n"
+            "4. 在语音/会议软件里把麦克风选为 CABLE Output，并关闭它自带的"
+            "降噪、AGC 和回声消除。\n"
+            "5. 回到 FocusMic 点“开始分离”；手遮嘴或按 Ctrl+Alt+M 可切到原始麦克风。\n\n"
+            "1. Install VB-CABLE.\n"
+            "2. Install FocusMic-Runtime, then FocusMic.\n"
+            "3. In the first-run wizard pick your microphone and camera; face the "
+            "camera with your mouth visible.\n"
+            "4. In your voice/meeting app select CABLE Output as the microphone and "
+            "disable its noise suppression, AGC and echo cancellation.\n"
+            "5. Click Start in FocusMic. Cover your mouth or press Ctrl+Alt+M to bypass "
+            "to the raw microphone."))
+
+        right.addWidget(self._about_card(
+            "隐私 / Privacy",
+            "所有推理在本机完成；摄像头画面不保存、不上传；没有遥测。"
+            "日志只写到本机 %LOCALAPPDATA%\\FocusMic\\logs。\n\n"
+            "All inference runs locally. Camera frames are not saved or uploaded. "
+            "No telemetry. Logs stay in %LOCALAPPDATA%\\FocusMic\\logs."))
 
         lic = QFrame()
         lic.setObjectName("Card")
         lic_box = QVBoxLayout(lic)
-        lic_box.setContentsMargins(18, 16, 18, 16)
-        lic_box.setSpacing(10)
-        lic_box.addWidget(_card_title("许可证与致谢", self.theme))
+        lic_box.setContentsMargins(18, 15, 18, 15)
+        lic_box.setSpacing(8)
+        lic_box.addWidget(_card_title("许可证与致谢 / License & credits", self.theme))
         lic_grid = QGridLayout()
         lic_grid.setHorizontalSpacing(18)
-        lic_grid.setVerticalSpacing(9)
+        lic_grid.setVerticalSpacing(7)
         license_rows = (
             ("FocusMic", "Apache-2.0"),
             ("Falcon", "Apache-2.0 · JusperLee"),
@@ -1321,50 +1411,66 @@ class MainWindow(QMainWindow):
             ("Lucide icons", "ISC"),
             ("Simple Icons", "CC0"),
             ("PySide6", "LGPL-3.0"),
-            ("VB-CABLE", "独立驱动，不随本应用分发"),
+            ("VB-CABLE", "separate driver · 独立驱动，不随应用分发"),
         )
         for row_index, (product, license_name) in enumerate(license_rows):
             lic_grid.addWidget(
-                ThemedLabel(product, self.theme, role="text", size=11), row_index, 0)
+                ThemedLabel(product, self.theme, role="text", size=10), row_index, 0)
             lic_grid.addWidget(
-                ThemedLabel(license_name, self.theme, role="muted", size=11),
+                ThemedLabel(license_name, self.theme, role="muted", size=10, wrap=True),
                 row_index, 1)
         lic_grid.setColumnStretch(1, 1)
         lic_box.addLayout(lic_grid)
         right.addWidget(lic)
 
+        links = QFrame()
+        links.setObjectName("Card")
+        links_box = QVBoxLayout(links)
+        links_box.setContentsMargins(18, 15, 18, 15)
+        links_box.setSpacing(7)
+        links_box.addWidget(_card_title("链接 / Links", self.theme))
+        links_box.addWidget(LinkLabel(
+            "github.com/ms12667/FocusMic",
+            "https://github.com/ms12667/FocusMic", self.theme, size=11))
+        links_box.addWidget(LinkLabel(
+            "Releases · 下载运行时与安装包 / downloads",
+            "https://github.com/ms12667/FocusMic/releases", self.theme, size=11))
+        right.addWidget(links)
+
+        status = runtime_env.check_installed()
         build = QFrame()
         build.setObjectName("Card")
         build_box = QVBoxLayout(build)
-        build_box.setContentsMargins(18, 16, 18, 16)
-        build_box.setSpacing(10)
-        build_box.addWidget(_card_title("构建信息", self.theme))
-        torch_version = _package_version("torch")
-        cuda = "CPU"
-        if "+cu" in torch_version:
-            tag = torch_version.split("+cu", 1)[1]
-            # torch tags are cu118/cu121/cu128 -> CUDA 11.8/12.1/12.8.
-            cuda = f"CUDA {tag[:-1]}.{tag[-1]}" if len(tag) > 1 else "CUDA"
+        build_box.setContentsMargins(18, 15, 18, 15)
+        build_box.setSpacing(8)
+        build_box.addWidget(_card_title("构建信息 / Build", self.theme))
         build_grid = QGridLayout()
         build_grid.setHorizontalSpacing(18)
-        build_grid.setVerticalSpacing(9)
+        build_grid.setVerticalSpacing(7)
+        torch_version = status.torch_version or "未安装 / Not installed"
+        cuda = f"CUDA {status.cuda_version}" if status.cuda_version else "—"
         build_rows = (
             ("Python", platform.python_version()),
             ("PySide6", _package_version("PySide6")),
             ("PyTorch", torch_version),
-            ("推理设备", cuda),
+            ("CUDA", cuda),
         )
         for row_index, (key, value) in enumerate(build_rows):
             build_grid.addWidget(
-                ThemedLabel(key, self.theme, role="muted", size=11), row_index, 0)
+                ThemedLabel(key, self.theme, role="muted", size=10), row_index, 0)
             build_grid.addWidget(
-                ThemedLabel(value, self.theme, role="text", size=11),
-                row_index, 1)
+                ThemedLabel(value, self.theme, role="text", size=10), row_index, 1)
         build_grid.setColumnStretch(1, 1)
         build_box.addLayout(build_grid)
         right.addWidget(build)
         right.addStretch(1)
-        layout.addLayout(right, 1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
         return page
 
     def _gain_changed(self, value: int):
