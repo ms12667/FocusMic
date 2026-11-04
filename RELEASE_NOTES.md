@@ -12,6 +12,7 @@ FocusMic uses camera lip motion and microphone audio to extract the target speak
 | `FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB | 先安装；PyTorch 2.9.1 + CUDA 12.8 运行时 / install first |
 | `FocusMic-Setup-0.1.0.exe` | 234.6 MB | 再安装；主程序 / install second |
 | `SHA256SUMS.txt` | 1 KB | 校验和 / checksums |
+| VB-CABLE (external) | — | 官方下载 / official download: https://vb-audio.com/Cable/ |
 
 两个安装包都是当前用户安装，不需要管理员权限。  
 Both installers are per-user and do not require administrator rights.
@@ -20,7 +21,7 @@ Both installers are per-user and do not require administrator rights.
 
 ### 安装顺序
 
-1. 安装 VB-CABLE 虚拟声卡（需单独下载）。
+1. 安装 [VB-CABLE](https://vb-audio.com/Cable/) 虚拟声卡（官方下载，需单独安装）。
 2. 安装 `FocusMic-Runtime-2.9.1-cu128.exe`。
 3. 安装 `FocusMic-Setup-0.1.0.exe`。
 4. 首次启动选择麦克风和摄像头。
@@ -49,7 +50,7 @@ Both installers are per-user and do not require administrator rights.
 
 ### Install order
 
-1. Install the VB-CABLE virtual audio driver (separate download).
+1. Install the [VB-CABLE](https://vb-audio.com/Cable/) virtual audio driver (official download, installed separately).
 2. Install `FocusMic-Runtime-2.9.1-cu128.exe`.
 3. Install `FocusMic-Setup-0.1.0.exe`.
 4. On first launch, select your microphone and camera.

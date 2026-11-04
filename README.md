@@ -58,7 +58,7 @@ FocusMic 不是传统降噪器的替代品。它解决的是“房间里有两�
 | GPU | NVIDIA 显卡，驱动支持 CUDA 12.8；已在 RTX 5070 Ti Laptop 12 GB 上验证 |
 | 摄像头 | 能看到正脸和嘴部；普通 USB/内置摄像头即可 |
 | 麦克风 | 任意 Windows 录音设备 |
-| 虚拟声卡 | VB-CABLE（或等价虚拟音频线），需单独安装 |
+| 虚拟声卡 | [VB-CABLE](https://vb-audio.com/Cable/)（官方下载，免费捐赠版；或等价虚拟音频线），需单独安装 |
 | 磁盘 | 主程序约 590 MB；AI 运行时约 4.3 GB |
 | 显存 | Falcon Small 约 384 MB；Falcon Big 约 567 MB |
 | 内存 | 建议 8 GB 以上 |
@@ -82,7 +82,7 @@ FocusMic 不是传统降噪器的替代品。它解决的是“房间里有两�
 
 ### 安装
 
-1. 安装 **VB-CABLE**（虚拟音频驱动，需单独下载安装）。
+1. 安装 [**VB-CABLE**](https://vb-audio.com/Cable/)（官方下载页；虚拟音频驱动，需单独安装）。
 2. 从 [Releases](https://github.com/ms12667/FocusMic/releases) 下载两个文件：
    - `FocusMic-Runtime-2.9.1-cu128.exe`（PyTorch 2.9.1 + CUDA 12.8，约 1.72 GiB）
    - `FocusMic-Setup-0.1.0.exe`（主程序，约 235 MB）
@@ -95,6 +95,9 @@ FocusMic 不是传统降噪器的替代品。它解决的是“房间里有两�
 安装包未签名，Windows SmartScreen 可能提示；这是正常现象。
 
 ### VB-CABLE 名称说明
+
+> 官方下载 / Official download: https://vb-audio.com/Cable/
+> 请从 VB-Audio 官方站点下载，避免第三方捆绑包 / Download from the official site to avoid bundled third-party installers.
 
 Windows 对两个端点的分类容易让人困惑：
 
@@ -244,7 +247,7 @@ with stationary noise because it reconstructs only the target voice.
 | GPU | NVIDIA GPU with a CUDA 12.8-capable driver; tested on RTX 5070 Ti Laptop 12 GB |
 | Camera | A camera that can see your face and mouth; a normal USB or built-in camera is enough |
 | Microphone | Any Windows recording device |
-| Virtual cable | VB-CABLE (or an equivalent virtual audio cable), installed separately |
+| Virtual cable | [VB-CABLE](https://vb-audio.com/Cable/) (official download, donationware; or an equivalent virtual audio cable), installed separately |
 | Disk | App about 590 MB; AI runtime about 4.3 GB |
 | VRAM | About 384 MB (Falcon Small) / 567 MB (Falcon Big) |
 | RAM | 8 GB+ recommended |
@@ -269,7 +272,7 @@ Other overhead:
 
 ### Install
 
-1. Install **VB-CABLE** (virtual audio driver, downloaded separately).
+1. Install [**VB-CABLE**](https://vb-audio.com/Cable/) (official download page; virtual audio driver, installed separately).
 2. Download both files from [Releases](https://github.com/ms12667/FocusMic/releases):
    - `FocusMic-Runtime-2.9.1-cu128.exe` (PyTorch 2.9.1 + CUDA 12.8, about 1.72 GiB)
    - `FocusMic-Setup-0.1.0.exe` (main app, about 235 MB)
@@ -286,6 +289,9 @@ crashing.
 The installers are unsigned; Windows SmartScreen may show a warning.
 
 ### VB-CABLE naming
+
+> Official download: https://vb-audio.com/Cable/
+> Download from the official VB-Audio site to avoid bundled third-party installers.
 
 Windows classifies the two endpoints in a way that is easy to get backwards:
 
