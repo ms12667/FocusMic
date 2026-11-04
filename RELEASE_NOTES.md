@@ -4,7 +4,7 @@
 
 | Artifact | Size | Notes |
 |---|---:|---|
-| `dist\installer\FocusMic-Setup-0.1.0.exe` | 234.6 MB (234,587,126 B) | main app, per-user, no admin |
+| `dist\installer\FocusMic-Setup-0.1.0.exe` | 234.6 MB (234,586,795 B) | main app, per-user, no admin |
 | `dist\installer\FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB (1,842,053,289 B) | PyTorch 2.9.1 + CUDA 12.8 runtime |
 | `dist\FocusMic\FocusMic.exe` | 19 MB | launcher inside the 586 MB portable folder |
 
@@ -13,7 +13,7 @@ Both installers are below GitHub's 2 GiB per-release-asset limit.
 SHA-256:
 
 ```text
-744b59726e6bd087a29a3e6a6d03ffbfa1f3190029ab8e438fc12674c15c1e16  FocusMic-Setup-0.1.0.exe
+1418b8de8b0eb5ba2d1f92a5d9c205310d8c2ae1846f9ccc03b97c3390c90b0f  FocusMic-Setup-0.1.0.exe
 4bc1c166e0caae9db4ced170b15e1614e9d813a0fa7d195eb1870d749a095ce9  FocusMic-Runtime-2.9.1-cu128.exe
 ```
 
@@ -28,6 +28,10 @@ SHA-256:
 - Closing the window now hides FocusMic to the tray by default. Settings has a
   "关闭窗口时最小化到托盘" switch; turning it off makes the × button quit.
 - The stop button now uses a solid red danger style while separation is running.
+- Headphone monitoring now follows the Windows default playback endpoint
+  (`WASAPI default_output_device`), instead of arbitrarily choosing another
+  WASAPI endpoint such as the speakers. It also uses the endpoint's native
+  sample rate instead of forcing 48 kHz.
 
 ## Why two installers
 

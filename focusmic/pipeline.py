@@ -99,7 +99,10 @@ class NativePipeline:
             raise
         if self.monitor is not None:
             try:
-                self.monitor.start()
+                monitor_status = self.monitor.start()
+                self.log(
+                    f"耳机监听输出：{monitor_status.get('device')} "
+                    f"({monitor_status.get('samplerate')} Hz)")
             except Exception as exc:
                 self.monitor_error = str(exc)
                 self.log(f"耳机监听不可用，继续分离：{exc}")

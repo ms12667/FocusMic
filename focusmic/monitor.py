@@ -9,28 +9,59 @@ import numpy as np
 
 
 def resolve_monitor_device(sd) -> tuple[int, str]:
+    """Follow the Windows default playback endpoint, not an arbitrary WASAPI one.
+
+    PortAudio lists the same physical endpoint once per host API
+    (MME/DirectSound/WASAPI/WDM-KS).  Preferring WASAPI without checking its
+    default_output_device used to pick the *other* endpoint (e.g. speakers
+    instead of the current headphones).
+    """
     devices = sd.query_devices()
-    default = sd.default.device[1]
+    hostapis = sd.query_hostapis()
+
+    def usable(index) -> bool:
+        if index is None or not 0 <= int(index) < len(devices):
+            return False
+        d = devices[int(index)]
+        name = str(d["name"]).upper()
+        return (int(d["max_output_channels"]) >= 2
+                and "CABLE" not in name and "VB-AUDIO" not in name)
+
+    def describe(index: int) -> tuple[int, str]:
+        d = devices[index]
+        api = str(hostapis[int(d["hostapi"])]["name"])
+        return index, f"{d['name']} [{api}]"
+
+    # 1) Windows' current default in WASAPI (the same endpoint Windows shows
+    #    in the volume flyout).
+    wasapi = next(
+        (i for i, api in enumerate(hostapis) if "WASAPI" in str(api["name"])),
+        None)
+    if wasapi is not None:
+        index = int(hostapis[wasapi].get("default_output_device", -1))
+        if usable(index):
+            return describe(index)
+
+    # 2) PortAudio's default output, whatever host API it belongs to.
+    index = int(sd.default.device[1])
+    if usable(index):
+        return describe(index)
+
+    # 3) Fallback: prefer a WASAPI endpoint that is not a virtual cable.
     candidates = []
     for i, d in enumerate(devices):
-        name = str(d["name"])
-        if int(d["max_output_channels"]) < 2:
+        if not usable(i):
             continue
-        if "CABLE" in name.upper():
-            continue
-        api = str(sd.query_hostapis(int(d["hostapi"]))["name"])
-        score = 0
-        if i == default:
-            score += 3
-        if "WASAPI" in api:
-            score += 4
-        if abs(float(d["default_samplerate"]) - 48000.0) < 1:
-            score += 1
-        candidates.append((score, i, name, api))
+        api = str(hostapis[int(d["hostapi"])]["name"])
+        candidates.append((
+            0 if "WASAPI" in api else 1,
+            abs(float(d["default_samplerate"]) - 48000.0),
+            i, str(d["name"]), api,
+        ))
     if not candidates:
         raise RuntimeError("找不到耳机/扬声器输出设备。")
-    candidates.sort(reverse=True)
-    _, idx, name, api = candidates[0]
+    candidates.sort()
+    _, _, idx, name, api = candidates[0]
     return idx, f"{name} [{api}]"
 
 
@@ -59,6 +90,8 @@ class MonitorOutput:
         self.stop()
         import sounddevice as sd
         idx, name = resolve_monitor_device(sd)
+        info = sd.query_devices(idx)
+        self.samplerate = int(round(float(info.get("default_samplerate", 48000)))) or 48000
         self._queue = queue.Queue(maxsize=self.max_queue)
         self._stop.clear()
         self._stream = sd.OutputStream(
@@ -154,5 +187,6 @@ class MonitorOutput:
             "queued": self._queue.qsize() if self._queue is not None else 0,
             "dropped": self.dropped, "underruns": self.underruns,
             "latency": self.latency,
+            "samplerate": self.samplerate,
             "gain_db": float(round(20 * np.log10(self.gain + 1e-12), 1)),
         }
