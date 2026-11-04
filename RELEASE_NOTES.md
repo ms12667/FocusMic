@@ -84,7 +84,7 @@ Both installers are per-user and do not require administrator rights.
 ## 校验 / Checksums
 
 ```text
-c6dee8313b5c97f1cc7532e758a946bab583db114a5abcf004d99ebba7687cd3  FocusMic-Setup-0.1.0.exe
+5827f753b0d29d15052ed354c0b8c732c88724b44a5bb01092d69603808bd2c6  FocusMic-Setup-0.1.0.exe
 70470a027728523e83d293c8e58d1988d2053da569b4f296c59a1a901a623af6  FocusMic-Runtime-2.9.1-cu128.exe
 ```
 
