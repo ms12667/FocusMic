@@ -49,6 +49,7 @@ class MonitorOutput:
         self.error = None
         self.dropped = 0
         self.underruns = 0
+        self.latency = 0.0
         self._queue = None
         self._stream = None
         self._thread = None
@@ -65,6 +66,7 @@ class MonitorOutput:
             dtype="float32", blocksize=self.blocksize, latency="low",
         )
         self._stream.start()
+        self.latency = float(getattr(self._stream, "latency", 0.0) or 0.0)
         self.device = name
         self.active = True
         self.error = None
@@ -94,7 +96,12 @@ class MonitorOutput:
                 self.dropped += 1
 
     def _writer(self) -> None:
-        import soxr
+        try:
+            import soxr
+        except Exception as exc:
+            self.error = f"soxr: {exc}"
+            self.active = False
+            return
         silence = np.zeros((self.blocksize, 2), np.float32)
         while not self._stop.is_set() and self._queue.qsize() < self.prebuffer:
             time.sleep(0.01)
@@ -146,5 +153,6 @@ class MonitorOutput:
             "active": self.active, "device": self.device, "error": self.error,
             "queued": self._queue.qsize() if self._queue is not None else 0,
             "dropped": self.dropped, "underruns": self.underruns,
+            "latency": self.latency,
             "gain_db": float(round(20 * np.log10(self.gain + 1e-12), 1)),
         }

@@ -6,3 +6,7 @@ __pycache__/
 *.py[cod]
 Falcon/.git-upstream/
 Falcon/studio/__pycache__/
+
+build/
+dist/
+build-tools/

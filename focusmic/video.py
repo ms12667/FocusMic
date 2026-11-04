@@ -80,6 +80,10 @@ class MouthTracker:
         self.hand_model_path = Path(hand_model_path) if hand_model_path else HAND_MODEL
         self.frames = deque(maxlen=int(fps * 8))
         self.lock = threading.Lock()
+        self._resource_lock = threading.Lock()
+        self._released = False
+        self._stop_lock = threading.Lock()
+        self._stop_called = False
         self.cap = None
         self.landmarker = None
         self.hand_landmarker = None
@@ -88,10 +92,17 @@ class MouthTracker:
         self.last_crop = None
         self.target_face = None
         self.target_width = None
+        self._target_gen = 0
+        self.manual_roi = None
+        self.manual_pick = False
+        self.manual_pick_started = 0.0
+        self.manual_expired = False
         self.error = None
         self.frames_seen = 0
         self.frames_tracked = 0
+        self.read_failures = 0
         self.last_time = None
+        self.started_at = None
         self.preview = None
         self.preview_box = None
         self.occlusion_streak = 0
@@ -135,9 +146,19 @@ class MouthTracker:
             self.hand_landmarker = None
         self.thread = threading.Thread(target=self._run, daemon=True, name="mouth-tracker")
         self.thread.start()
+        self.started_at = time.perf_counter()
         return self
 
     def _choose_face(self, landmarks_list, width, height):
+        with self.lock:
+            pending = self.manual_pick
+            started = self.manual_pick_started
+        if pending and time.perf_counter() - started > 3.0:
+            with self.lock:
+                if self.manual_pick:
+                    self.manual_pick = False
+                    self.manual_roi = None
+                    self.manual_expired = True
         faces = []
         for L in landmarks_list:
             geo = mouth_geometry(L, width, height)
@@ -145,19 +166,69 @@ class MouthTracker:
                 faces.append((L, geo))
         if not faces:
             return None
-        if self.target_face is not None:
-            tx, ty, tw = self.target_face
+        with self.lock:
+            roi = self.manual_roi if self.manual_pick else None
+            pick_started = self.manual_pick_started
+            gen = self._target_gen
+            target = self.target_face
+            target_width = self.target_width
+        if roi is not None and time.perf_counter() - pick_started > 3.0:
+            with self.lock:
+                if self._target_gen == gen:
+                    self.manual_pick = False
+                    self.manual_roi = None
+                    self.manual_expired = True
+            roi = None
+        if roi is not None:
+            rx0, ry0, rx1, ry1 = roi
+            rcx, rcy = (rx0 + rx1) / 2.0, (ry0 + ry1) / 2.0
+            inside = []
+            for L, geo in faces:
+                cx, cy, _side, _face_w = geo
+                nx, ny = cx / max(width, 1), cy / max(height, 1)
+                if rx0 <= nx <= rx1 and ry0 <= ny <= ry1:
+                    inside.append((L, geo, (nx - rcx) ** 2 + (ny - rcy) ** 2))
+            if not inside:
+                return None
+            # Prefer the face whose mouth center is nearest the middle of the
+            # drawn box, not merely the largest face (the roommate may be larger).
+            chosen = min(inside, key=lambda item: item[2])
+            cx, cy, _side, face_w = chosen[1]
+            with self.lock:
+                if self._target_gen == gen:
+                    self.manual_pick = False
+                    self.manual_roi = None
+                    self.manual_expired = False
+                    self.target_face = (cx, cy, face_w)
+                    self.target_width = face_w
+            return chosen[0], chosen[1]
+        if target is not None:
+            tx, ty, tw = target
             best = None
             best_d = 1e9
             for L, geo in faces:
                 cx, cy, side, face_w = geo
                 shift = float(np.hypot(cx - tx, cy - ty) / max(tw, 1))
-                ratio = face_w / max(self.target_width or face_w, 1)
+                ratio = face_w / max(target_width or face_w, 1)
                 if shift <= 0.75 and 1 / 1.8 <= ratio <= 1.8 and shift < best_d:
                     best, best_d = (L, geo), shift
             if best is not None:
+                cx, cy, _side, face_w = best[1]
+                with self.lock:
+                    if self._target_gen == gen:
+                        self.target_face = (cx, cy, face_w)
+                        self.target_width = face_w
                 return best
-        return max(faces, key=lambda item: item[1][3])
+            # Do not jump to another face just because the target missed one
+            # frame. Keep the old target and let safe bypass handle true loss.
+            return None
+        chosen = max(faces, key=lambda item: item[1][3])
+        cx, cy, _side, face_w = chosen[1]
+        with self.lock:
+            if self._target_gen == gen:
+                self.target_face = (cx, cy, face_w)
+                self.target_width = face_w
+        return chosen
 
     @staticmethod
     def _hand_covers_mouth(hand_result, box, w, h) -> bool:
@@ -193,65 +264,93 @@ class MouthTracker:
         return False
 
     def _run(self):
-        from mediapipe.tasks.python import vision  # noqa: F401  (runtime import already done)
-        while not self._stop.is_set():
-            ok, frame = self.cap.read()
-            if not ok:
-                time.sleep(0.02)
-                continue
-            now = time.perf_counter()
-            h, w = frame.shape[:2]
-            scale = min(1.0, 960.0 / max(w, h))
-            small = cv2.resize(frame, (int(round(w * scale)), int(round(h * scale))),
-                               interpolation=cv2.INTER_AREA)
-            rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-            import mediapipe as mp
-            result = self.landmarker.detect_for_video(
-                mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
-            chosen = self._choose_face(result.face_landmarks or [], w, h)
-            crop = None
-            tracked = False
-            if chosen is not None:
-                L, geo = chosen
-                cx, cy, side, face_w = geo
-                raw_occluded = False
-                if self.hand_landmarker is not None:
-                    try:
-                        hand_result = self.hand_landmarker.detect_for_video(
-                            mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
-                        raw_occluded = self._hand_covers_mouth(
-                            hand_result, lip_box(L, w, h), w, h)
-                    except Exception as exc:
-                        self.error = f"hand tracker: {exc}"
-                        self.hand_landmarker = None
-                self.occlusion_streak = self.occlusion_streak + 1 if raw_occluded else 0
-                occluded = self.occlusion_streak >= 3
-                self.occluded = occluded
-                if not occluded:
-                    crop = crop_mouth(frame, L)
-                    if crop is not None:
-                        tracked = True
-                        self.target_face = (cx, cy, face_w)
-                        self.target_width = face_w
-                        self.last_crop = crop
+        try:
+            while not self._stop.is_set():
+                ok, frame = self.cap.read()
+                if not ok:
+                    self.read_failures += 1
+                    time.sleep(0.02)
+                    continue
+                self.read_failures = 0
+                now = time.perf_counter()
+                h, w = frame.shape[:2]
+                scale = min(1.0, 960.0 / max(w, h))
+                small = cv2.resize(frame, (int(round(w * scale)), int(round(h * scale))),
+                                   interpolation=cv2.INTER_AREA)
+                rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                import mediapipe as mp
+                result = self.landmarker.detect_for_video(
+                    mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
+                chosen = self._choose_face(result.face_landmarks or [], w, h)
+                crop = None
+                tracked = False
+                if chosen is not None:
+                    L, geo = chosen
+                    cx, cy, side, face_w = geo
+                    raw_occluded = False
+                    if self.hand_landmarker is not None:
+                        try:
+                            hand_result = self.hand_landmarker.detect_for_video(
+                                mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb),
+                                int(now * 1000))
+                            raw_occluded = self._hand_covers_mouth(
+                                hand_result, lip_box(L, w, h), w, h)
+                        except Exception as exc:
+                            self.error = f"hand tracker: {exc}"
+                            self.hand_landmarker = None
+                    self.occlusion_streak = self.occlusion_streak + 1 if raw_occluded else 0
+                    occluded = self.occlusion_streak >= 3
+                    self.occluded = occluded
+                    if not occluded:
+                        crop = crop_mouth(frame, L)
+                        if crop is not None:
+                            tracked = True
+                            self.last_crop = crop
+                            self.preview_box = (cx / w, cy / h, side / min(w, h))
+                    else:
+                        crop = self.last_crop
                         self.preview_box = (cx / w, cy / h, side / min(w, h))
                 else:
-                    crop = self.last_crop
-                    self.preview_box = (cx / w, cy / h, side / min(w, h))
-            else:
-                self.occlusion_streak = 0
-                self.occluded = False
-            if crop is None:
-                crop = self.last_crop if self.last_crop is not None else np.zeros((CROP, CROP), np.uint8)
-            with self.lock:
-                self.frames.append((now, crop, tracked))
-                self.frames_seen += 1
-                if tracked:
-                    self.frames_tracked += 1
-                self.last_time = now
-                self.preview = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
-            # Keep the camera at ~25 fps even if the driver runs faster.
-            time.sleep(max(0.0, 1.0 / self.fps - (time.perf_counter() - now)))
+                    self.occlusion_streak = 0
+                    self.occluded = False
+                if crop is None:
+                    crop = self.last_crop if self.last_crop is not None else np.zeros((CROP, CROP), np.uint8)
+                with self.lock:
+                    self.frames.append((now, crop, tracked))
+                    self.frames_seen += 1
+                    if tracked:
+                        self.frames_tracked += 1
+                    self.last_time = now
+                    self.preview = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+                # Keep the camera at ~25 fps even if the driver runs faster.
+                time.sleep(max(0.0, 1.0 / self.fps - (time.perf_counter() - now)))
+        except Exception as exc:
+            self.error = f"camera thread: {exc}"
+        finally:
+            # The camera thread is the only owner of cap/landmarkers while it
+            # runs, so it releases them here. This avoids closing MediaPipe
+            # objects from the GUI thread while detect_for_video is using them.
+            self._release_resources()
+
+    def _release_resources(self):
+        with self._resource_lock:
+            if self._released:
+                return
+            self._released = True
+            cap, self.cap = self.cap, None
+            landmarker, self.landmarker = self.landmarker, None
+            hand, self.hand_landmarker = self.hand_landmarker, None
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+        for obj in (landmarker, hand):
+            if obj is not None:
+                try:
+                    obj.close()
+                except Exception:
+                    pass
 
     def frames_for(self, start_time: float, end_time: float, count: int = 50,
                    offset_ms: float = 30.0) -> tuple[np.ndarray, float]:
@@ -273,10 +372,32 @@ class MouthTracker:
                 tracked += 1
         return out, tracked / count
 
-    def reset_target(self):
+    def set_manual_roi(self, x0: float, y0: float, x1: float, y1: float):
+        """One-shot target pick from a normalized face box on the preview."""
         with self.lock:
+            self._target_gen += 1
+            self.manual_roi = (
+                max(0.0, min(float(x0), float(x1))),
+                max(0.0, min(float(y0), float(y1))),
+                min(1.0, max(float(x0), float(x1))),
+                min(1.0, max(float(y0), float(y1))),
+            )
+            self.manual_pick = True
+            self.manual_pick_started = time.perf_counter()
+            self.manual_expired = False
             self.target_face = None
             self.target_width = None
+            self.last_crop = None
+            self.preview_box = None
+
+    def reset_target(self):
+        with self.lock:
+            self._target_gen += 1
+            self.target_face = None
+            self.target_width = None
+            self.manual_roi = None
+            self.manual_pick = False
+            self.manual_expired = False
             self.last_crop = None
             self.preview_box = None
 
@@ -294,22 +415,32 @@ class MouthTracker:
                 "tracked": self.frames_tracked,
                 "fps": (self.frames_tracked / max(1, self.frames_seen)),
                 "occluded": self.occluded,
+                "manual_pick": self.manual_pick,
+                "manual_expired": self.manual_expired,
+                "read_failures": self.read_failures,
+                "started_at": self.started_at,
+                # None means start() has not been called yet.  A dead thread is
+                # only meaningful after the tracker has been started.
+                "thread_alive": (
+                    None if self.thread is None else bool(self.thread.is_alive())),
+                "last_time": self.last_time,
                 "error": self.error,
             }
 
     def stop(self):
+        with self._stop_lock:
+            if self._stop_called:
+                return
+            self._stop_called = True
         self._stop.set()
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2.0)
-        if self.cap is not None:
-            self.cap.release()
-            self.cap = None
-        if self.landmarker is not None:
-            self.landmarker.close()
-            self.landmarker = None
-        if self.hand_landmarker is not None:
-            self.hand_landmarker.close()
-            self.hand_landmarker = None
+        thread = self.thread
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            # A blocking cap.read() or detect_for_video() can take a moment.
+            # Never close MediaPipe objects while that thread is still inside
+            # them: the camera thread's finally block owns resource release.
+            thread.join(timeout=2.0)
+        if thread is None or not thread.is_alive():
+            self._release_resources()
 
 
 class SimMouth:

@@ -9,12 +9,14 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLay
 
 
 class LineChart(QWidget):
-    def __init__(self, color: str, theme, parent=None, points: int = 90):
+    def __init__(self, color: str, theme, parent=None, points: int = 50,
+                 decimals: int = 0):
         super().__init__(parent)
         self._history = deque([0.0] * points, maxlen=points)
         self._color = QColor(color)
         self._theme = theme
         self._fixed_max = None
+        self._decimals = int(decimals)
         self.setMinimumHeight(112)
 
     def set_theme(self, theme):
@@ -50,8 +52,9 @@ class LineChart(QWidget):
         font = QFont("Cascadia Mono", 7)
         painter.setFont(font)
         painter.setPen(QColor(self._theme.faint))
-        painter.drawText(QRectF(rect.right() + 5, rect.top() - 7, 22, 14),
-                         Qt.AlignLeft | Qt.AlignVCenter, f"{ceiling:.0f}")
+        painter.drawText(QRectF(rect.right() + 5, rect.top() - 7, 30, 14),
+                         Qt.AlignLeft | Qt.AlignVCenter,
+                         f"{ceiling:.{self._decimals}f}")
         painter.drawText(QRectF(rect.right() + 5, rect.bottom() - 7, 22, 14),
                          Qt.AlignLeft | Qt.AlignVCenter, "0")
         # Area + line.
@@ -101,15 +104,17 @@ class LineChart(QWidget):
 
 class MetricCard(QFrame):
     def __init__(self, title: str, unit: str, color: str, theme,
-                 fixed_max: float | None = None, parent=None):
+                 fixed_max: float | None = None, parent=None,
+                 color_role: str | None = None):
         super().__init__(parent)
         self.setObjectName("Card")
         self._title = title
         self._unit = unit
         self._color = color
+        self._color_role = color_role
         self._theme = theme
         self._fixed_max = fixed_max
-        self._values: deque[float] = deque(maxlen=90)
+        self._values: deque[float] = deque(maxlen=50)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 12, 14, 10)
@@ -125,7 +130,7 @@ class MetricCard(QFrame):
         top.addStretch(1)
         top.addWidget(self.value)
         root.addLayout(top)
-        self.chart = LineChart(color, theme)
+        self.chart = LineChart(color, theme, decimals=2 if unit == "s" else 0)
         self.chart.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         if fixed_max is not None:
             self.chart._fixed_max = fixed_max
@@ -137,6 +142,9 @@ class MetricCard(QFrame):
 
     def set_theme(self, theme):
         self._theme = theme
+        if self._color_role:
+            self._color = getattr(theme, self._color_role, self._color)
+            self.chart.set_color(self._color)
         self.chart.set_theme(theme)
         self.title.setStyleSheet(f"color:{theme.text};")
         self.value.setStyleSheet(f"color:{theme.text};")
@@ -145,29 +153,36 @@ class MetricCard(QFrame):
             f"QFrame#Card{{background:{theme.surface};border:1px solid {theme.border};border-radius:12px;}}")
         self.chart.update()
 
+    def _format(self, value: float) -> str:
+        return f"{value:.2f}" if self._unit == "s" else f"{value:.0f}"
+
     def push(self, value: float):
         v = float(value)
         self._values.append(v)
         self.chart.push(v)
-        if self._unit == "ms":
-            self.value.setText(f"{v:.0f}<span style='font-size:11px;color:{self._theme.muted}'> ms</span>")
-        elif self._unit == "%":
-            self.value.setText(f"{v:.0f}<span style='font-size:11px;color:{self._theme.muted}'> %</span>")
-        elif self._unit == "MB":
-            self.value.setText(f"{v:.0f}<span style='font-size:11px;color:{self._theme.muted}'> MB</span>")
+        text = self._format(v)
+        if self._unit:
+            self.value.setText(
+                f"{text}<span style='font-size:11px;color:{self._theme.muted}'> "
+                f"{self._unit}</span>")
         else:
-            self.value.setText(f"{v:.0f}")
+            self.value.setText(text)
         vals = list(self._values)
         if vals:
-            self.footer.setText(f"平均 {sum(vals)/len(vals):.0f} · 最高 {max(vals):.0f} {self._unit}")
+            self.footer.setText(
+                f"平均 {self._format(sum(vals)/len(vals))} · "
+                f"最高 {self._format(max(vals))} {self._unit}")
 
 
 class KpiCard(QFrame):
-    def __init__(self, label: str, value: str, unit: str, theme, accent: str | None = None, parent=None):
+    def __init__(self, label: str, value: str, unit: str, theme,
+                 accent: str | None = None, parent=None,
+                 accent_role: str | None = None):
         super().__init__(parent)
         self.setObjectName("Card")
         self._theme = theme
         self._accent = accent
+        self._accent_role = accent_role
         root = QVBoxLayout(self)
         root.setContentsMargins(13, 10, 13, 10)
         root.setSpacing(2)
@@ -182,6 +197,8 @@ class KpiCard(QFrame):
 
     def set_theme(self, theme):
         self._theme = theme
+        if self._accent_role:
+            self._accent = getattr(theme, self._accent_role, self._accent)
         self.label.setStyleSheet(f"color:{theme.muted};font-size:11px;")
         self.value.setStyleSheet(f"color:{self._accent or theme.text};")
         self.setStyleSheet(

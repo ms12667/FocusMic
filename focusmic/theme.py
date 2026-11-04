@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from PySide6.QtGui import QColor
+
+from .paths import ASSETS_DIR
+
+_CHEVRON = (ASSETS_DIR / "icons" / "chevron-down.svg").as_posix()
+
 
 @dataclass(frozen=True)
 class Theme:
@@ -78,6 +84,9 @@ def theme_for(mode: str, system_dark: bool) -> Theme:
 
 
 def stylesheet(t: Theme) -> str:
+    danger_hover = QColor(t.red).lighter(112).name()
+    danger_pressed = QColor(t.red).darker(112).name()
+    danger_text = t.on_accent if t.dark else "#FFFFFF"
     return f"""
     QWidget {{
         color: {t.text};
@@ -105,6 +114,11 @@ def stylesheet(t: Theme) -> str:
         border: 1px solid {t.border};
         border-radius: 10px;
     }}
+    QFrame#RuntimeBanner {{
+        background: {t.accent_soft};
+        border: 1px solid {t.accent};
+        border-radius: 10px;
+    }}
     QComboBox, QSpinBox, QLineEdit, QKeySequenceEdit {{
         background: {t.surface2};
         border: 1px solid {t.border};
@@ -114,10 +128,16 @@ def stylesheet(t: Theme) -> str:
         selection-background-color: {t.accent_soft};
         selection-color: {t.text};
     }}
+    QComboBox {{ padding-right: 27px; }}
     QComboBox:hover, QSpinBox:hover, QLineEdit:hover, QKeySequenceEdit:hover {{
         border-color: {t.faint};
     }}
-    QComboBox::drop-down {{ border: none; width: 22px; }}
+    QComboBox::drop-down {{ border: none; width: 25px; }}
+    QComboBox::down-arrow {{
+        image: url("{_CHEVRON}");
+        width: 12px;
+        height: 12px;
+    }}
     QComboBox QAbstractItemView {{
         background: {t.surface2};
         border: 1px solid {t.border};
@@ -145,7 +165,25 @@ def stylesheet(t: Theme) -> str:
     }}
     QPushButton#primary:hover {{ background: {t.accent_hover}; border-color: {t.accent_hover}; }}
     QPushButton#primary:disabled {{ background: {t.surface2}; border-color: {t.border}; color: {t.faint}; }}
-    QPushButton#danger {{ color: {t.red}; border-color: {t.border}; }}
+    QPushButton#danger {{
+        background: {t.red};
+        border: 1px solid {t.red};
+        color: {danger_text};
+        font-weight: 600;
+    }}
+    QPushButton#danger:hover {{
+        background: {danger_hover};
+        border-color: {danger_hover};
+    }}
+    QPushButton#danger:pressed {{
+        background: {danger_pressed};
+        border-color: {danger_pressed};
+    }}
+    QPushButton#danger:disabled {{
+        background: {t.surface2};
+        border-color: {t.border};
+        color: {t.faint};
+    }}
     QPushButton#ghost {{ background: transparent; border-color: transparent; color: {t.muted}; }}
     QPushButton#ghost:hover {{ background: {t.hover}; color: {t.text}; }}
     QCheckBox {{ spacing: 7px; color: {t.text}; }}

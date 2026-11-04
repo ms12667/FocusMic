@@ -11,6 +11,8 @@ from .paths import config_path
 @dataclass
 class Settings:
     mic_name: str = ""
+    mic_hostapi: str = ""
+    close_to_tray: bool = True
     camera: int = 0
     variant: str = "small"
     av_offset_ms: int = 30
@@ -22,12 +24,15 @@ class Settings:
     hotkey_enabled: bool = True
     hotkey: str = "ctrl+alt+m"
     start_with_windows: bool = False
+    onboarding_done: bool = False
 
 
 def _coerce(data: dict) -> Settings:
     defaults = Settings()
     out = Settings()
     out.mic_name = str(data.get("mic_name", defaults.mic_name) or "")
+    out.mic_hostapi = str(data.get("mic_hostapi", defaults.mic_hostapi) or "")
+    out.close_to_tray = bool(data.get("close_to_tray", defaults.close_to_tray))
     try:
         out.camera = max(0, int(data.get("camera", defaults.camera)))
     except (TypeError, ValueError):
@@ -53,6 +58,8 @@ def _coerce(data: dict) -> Settings:
     hotkey = str(data.get("hotkey", defaults.hotkey) or defaults.hotkey).strip().lower()
     out.hotkey = hotkey or defaults.hotkey
     out.start_with_windows = bool(data.get("start_with_windows", defaults.start_with_windows))
+    # Existing configs predate the wizard; only a brand-new install sees it.
+    out.onboarding_done = bool(data.get("onboarding_done", True))
     return out
 
 

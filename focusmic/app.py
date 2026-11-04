@@ -1,6 +1,7 @@
 """FocusMic application entry point + single-instance guard."""
 from __future__ import annotations
 
+import ctypes
 import logging
 import sys
 
@@ -15,6 +16,14 @@ SERVER_NAME = "FocusMic-single-instance"
 
 
 def main() -> int:
+    if "--selftest" in sys.argv:
+        from .selftest import run_selftest
+        return run_selftest()
+    # Inno Setup's AppMutex can detect a running instance during install/uninstall.
+    try:
+        ctypes.windll.kernel32.CreateMutexW(None, False, "FocusMicAppMutex")
+    except Exception:
+        pass
     log = setup_logging()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")

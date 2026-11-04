@@ -46,11 +46,7 @@ def log_path() -> Path:
 
 
 def mediapipe_model(name: str) -> Path:
-    candidate = ASSETS_DIR / "mediapipe" / name
-    if candidate.is_file():
-        return candidate
-    legacy = PROJECT_ROOT / "Falcon" / "studio" / "web" / "vendor" / "mediapipe" / name
-    return legacy
+    return ASSETS_DIR / "mediapipe" / name
 
 
 def icon_path() -> Path:
@@ -75,5 +71,19 @@ def weights_dir() -> Path:
 
 
 def weight_path(variant: str = "small") -> Path:
+    """Prefer an existing override file, else the bundled weights."""
     name = "falcon-big.pt" if variant == "big" else "falcon.pt"
-    return weights_dir() / name
+    candidates = []
+    env = os.environ.get("FOCUSMIC_WEIGHTS")
+    if env:
+        candidates.append(Path(env))
+    candidates.extend([
+        localappdata_dir() / "models",
+        ASSETS_DIR / "models",
+        PROJECT_ROOT / "weights",
+    ])
+    for directory in candidates:
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return PROJECT_ROOT / "weights" / name

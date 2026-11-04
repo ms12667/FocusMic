@@ -78,6 +78,7 @@ class LiveAudio:
         self.total = 0
         self.start_time = None
         self.stream = None
+        self.latency = 0.0
         self.error = None
         self._resampler = None
         self._channels = 1
@@ -95,6 +96,7 @@ class LiveAudio:
                 )
                 self._channels = channels
                 self.stream.start()
+                self.latency = float(getattr(self.stream, "latency", 0.0) or 0.0)
                 return self
             except Exception:
                 self.stream = None
