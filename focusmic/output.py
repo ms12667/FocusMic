@@ -13,6 +13,8 @@ import time
 
 import numpy as np
 
+from .i18n import t
+
 
 def resolve_cable_input(sd) -> tuple[int, str]:
     """Pick the 2-channel CABLE Input, preferring WASAPI at 48 kHz."""
@@ -34,7 +36,7 @@ def resolve_cable_input(sd) -> tuple[int, str]:
             score += 1
         candidates.append((score, i, name, api))
     if not candidates:
-        raise RuntimeError("找不到 CABLE Input（VB-Audio Virtual Cable）。请先安装 VB-CABLE。")
+        raise RuntimeError(t("error.cable_missing"))
     candidates.sort(reverse=True)
     _, idx, name, api = candidates[0]
     return idx, f"{name} [{api}]"

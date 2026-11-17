@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import sounddevice as sd
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from .audio import input_device_label
+from .cameras import list_cameras
 from .controls import ThemedLabel
+from .i18n import LANGUAGES, current_language, set_language, t
 from .icons import render_icon
 from .output import resolve_cable_input
 
@@ -16,29 +19,38 @@ from .output import resolve_cable_input
 class OnboardingDialog(QDialog):
     """Four short pages: welcome, devices, output, ready.
 
-    It never opens the microphone or camera; it only reads device lists.
+    The language selector is always available in the header, so a first-run
+    user can switch the whole wizard before choosing devices. It never opens
+    the microphone or camera; it only reads device lists.
     """
 
     STEPS = 4
 
-    def __init__(self, settings, theme, mic_devices, parent=None):
+    def __init__(self, settings, theme, mic_devices, parent=None,
+                 camera_infos=None):
         super().__init__(parent)
-        self.setWindowTitle("FocusMic 首次设置")
-        self.setModal(True)
-        self.setMinimumSize(640, 480)
-        self.resize(640, 480)
         self._settings = settings
         self._theme = theme
         self._mic_devices = list(mic_devices)
+        self._camera_infos = list(camera_infos) if camera_infos else list_cameras()
+        self.start_language = current_language()
+        self.language = current_language()
+        self.language_changed = False
         self.applied = False
         self.mic_name = settings.mic_name
         self.mic_hostapi = settings.mic_hostapi
         self.camera = int(settings.camera)
+        self._content = None
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(0, 0, 0, 0)
+        self.setWindowTitle(t("onboarding.window_title"))
+        self.setModal(True)
+        self.setMinimumSize(640, 480)
+        self.resize(640, 480)
         self._build()
 
     def _title(self, text: str) -> ThemedLabel:
-        label = ThemedLabel(text, self._theme, role="text", size=21, weight=600)
-        return label
+        return ThemedLabel(text, self._theme, role="text", size=21, weight=600)
 
     def _body(self, text: str) -> ThemedLabel:
         return ThemedLabel(text, self._theme, role="muted", size=11, wrap=True)
@@ -64,7 +76,12 @@ class OnboardingDialog(QDialog):
         return card, box
 
     def _build(self):
-        root = QVBoxLayout(self)
+        if self._content is not None:
+            self._root.removeWidget(self._content)
+            self._content.deleteLater()
+        self._content = QWidget(self)
+        self._root.addWidget(self._content)
+        root = QVBoxLayout(self._content)
         root.setContentsMargins(26, 22, 26, 20)
         root.setSpacing(12)
 
@@ -75,6 +92,18 @@ class OnboardingDialog(QDialog):
         top.addSpacing(8)
         top.addWidget(ThemedLabel("FocusMic", self._theme, role="text", size=16, weight=600))
         top.addStretch(1)
+        top.addWidget(ThemedLabel(
+            t("onboarding.language.label"), self._theme, role="muted", size=10))
+        self.language_combo = QComboBox()
+        for language in LANGUAGES:
+            self.language_combo.addItem(language.native, language.code)
+        index = self.language_combo.findData(self.language)
+        if index >= 0:
+            self.language_combo.setCurrentIndex(index)
+        self.language_combo.setToolTip(t("onboarding.language.hint"))
+        self.language_combo.currentIndexChanged.connect(self._language_changed)
+        top.addWidget(self.language_combo)
+        top.addSpacing(8)
         self.step_label = ThemedLabel("", self._theme, role="faint", size=10)
         top.addWidget(self.step_label)
         root.addLayout(top)
@@ -88,15 +117,15 @@ class OnboardingDialog(QDialog):
 
         footer = QHBoxLayout()
         footer.setSpacing(8)
-        skip = QPushButton("跳过")
+        skip = QPushButton(t("onboarding.skip"))
         skip.setObjectName("ghost")
         skip.clicked.connect(self._skip)
         footer.addWidget(skip)
         footer.addStretch(1)
-        self.back_btn = QPushButton("上一步")
+        self.back_btn = QPushButton(t("onboarding.back"))
         self.back_btn.setObjectName("ghost")
         self.back_btn.clicked.connect(self._back)
-        self.next_btn = QPushButton("下一步")
+        self.next_btn = QPushButton(t("onboarding.next"))
         self.next_btn.setObjectName("primary")
         self.next_btn.clicked.connect(self._next)
         footer.addWidget(self.back_btn)
@@ -104,21 +133,51 @@ class OnboardingDialog(QDialog):
         root.addLayout(footer)
         self._sync()
 
+    def _language_changed(self, _index=None):
+        code = self.language_combo.currentData()
+        if not code or code == self.language:
+            return
+        step = self.stack.currentIndex()
+        self.language = str(code)
+        self.language_changed = self.language != self.start_language
+        set_language(self.language)
+        # Rebuilding deletes the combo that is emitting this signal, so defer.
+        QTimer.singleShot(0, lambda: self._reload(step))
+
+    def _reload(self, step: int):
+        mic_identity = None
+        selected = self.mic.currentData()
+        if selected is not None:
+            mic_identity = (str(selected["name"]), str(selected["hostapi"]))
+        camera = int(self.camera.currentData()) if self.camera.currentData() is not None else 0
+        self.setWindowTitle(t("onboarding.window_title"))
+        self._build()
+        if mic_identity is not None:
+            for i, device in enumerate(self._mic_devices):
+                if (str(device["name"]), str(device["hostapi"])) == mic_identity:
+                    self.mic.setCurrentIndex(i)
+                    break
+        pos = self.camera.findData(camera)
+        if pos >= 0:
+            self.camera.setCurrentIndex(pos)
+        self.stack.setCurrentIndex(max(0, min(self.STEPS - 1, int(step))))
+        self._sync()
+
     def _page_welcome(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addWidget(self._title("欢迎使用 FocusMic"))
-        layout.addWidget(self._body(
-            "FocusMic 会同时看摄像头和听麦克风：用嘴型认住你，"
-            "把麦克风里属于你的声音留下，把旁边人的声音尽量压掉。"))
+        layout.addWidget(self._title(t("onboarding.welcome.title")))
+        layout.addWidget(self._body(t("onboarding.welcome.body")))
         card, box = self._card()
-        box.addWidget(ThemedLabel("它是怎么工作的", self._theme, role="text", size=13, weight=600))
+        box.addWidget(ThemedLabel(
+            t("onboarding.welcome.how"), self._theme,
+            role="text", size=13, weight=600))
         for text in (
-            "摄像头只用来识别嘴部，画面不会保存。",
-            "声音和画面都只在本机处理，不会上传。",
-            "分离结果通过本机虚拟声卡送到语音或会议软件。",
+            t("onboarding.welcome.b1"),
+            t("onboarding.welcome.b2"),
+            t("onboarding.welcome.b3"),
         ):
             box.addWidget(self._bullet(text))
         layout.addWidget(card)
@@ -130,19 +189,18 @@ class OnboardingDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addWidget(self._title("选择设备"))
-        layout.addWidget(self._body(
-            "先选好你平时用的麦克风和摄像头。以后也可以在主页随时更改，"
-            "不需要重新运行这个向导。"))
+        layout.addWidget(self._title(t("onboarding.devices.title")))
+        layout.addWidget(self._body(t("onboarding.devices.body")))
         card, box = self._card()
-        box.addWidget(ThemedLabel("麦克风", self._theme, role="muted", size=10))
+        box.addWidget(ThemedLabel(
+            t("onboarding.devices.mic"), self._theme, role="muted", size=10))
         self.mic = QComboBox()
         self.mic.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.mic.setMinimumContentsLength(16)
         for d in self._mic_devices:
-            self.mic.addItem(f"{d['name']}  ·  {d['hostapi']}", d)
+            self.mic.addItem(input_device_label(d), d)
         if not self._mic_devices:
-            self.mic.addItem("没有检测到录音设备", None)
+            self.mic.addItem(t("onboarding.devices.no_mic"), None)
         else:
             target = -1
             for i, d in enumerate(self._mic_devices):
@@ -165,10 +223,13 @@ class OnboardingDialog(QDialog):
             if target >= 0:
                 self.mic.setCurrentIndex(target)
         box.addWidget(self.mic)
-        box.addWidget(ThemedLabel("摄像头", self._theme, role="muted", size=10))
+        box.addWidget(ThemedLabel(
+            t("onboarding.devices.camera"), self._theme, role="muted", size=10))
         self.camera = QComboBox()
-        for i in range(6):
-            self.camera.addItem(f"摄像头 {i}", i)
+        for info in self._camera_infos:
+            self.camera.addItem(
+                info.label(t("onboarding.devices.camera_item", index=info.index)),
+                info.index)
         pos = self.camera.findData(int(self._settings.camera))
         if pos >= 0:
             self.camera.setCurrentIndex(pos)
@@ -182,21 +243,21 @@ class OnboardingDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addWidget(self._title("接到语音软件"))
-        layout.addWidget(self._body(
-            "FocusMic 会把分离后的声音送到本机虚拟声卡。"
-            "在语音或会议软件里，把麦克风选成 CABLE Output 即可。"))
+        layout.addWidget(self._title(t("onboarding.output.title")))
+        layout.addWidget(self._body(t("onboarding.output.body")))
         card, box = self._card()
-        box.addWidget(ThemedLabel("虚拟声卡检测", self._theme, role="text", size=13, weight=600))
-        self.cable_status = ThemedLabel("正在检测…", self._theme, role="muted", size=11, wrap=True)
+        box.addWidget(ThemedLabel(
+            t("onboarding.output.check_title"), self._theme,
+            role="text", size=13, weight=600))
+        self.cable_status = ThemedLabel(
+            t("onboarding.output.detecting"), self._theme,
+            role="muted", size=11, wrap=True)
         box.addWidget(self.cable_status)
-        recheck = QPushButton("重新检测")
+        recheck = QPushButton(t("onboarding.output.recheck"))
         recheck.clicked.connect(self._check_cable)
         box.addWidget(recheck, 0, Qt.AlignLeft)
         layout.addWidget(card)
-        layout.addWidget(self._body(
-            "如果还没有安装虚拟声卡，请先安装后点“重新检测”。"
-            "检测不到也可以先完成向导，之后在主页继续配置。"))
+        layout.addWidget(self._body(t("onboarding.output.hint")))
         layout.addStretch(1)
         self._check_cable()
         return page
@@ -206,10 +267,8 @@ class OnboardingDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addWidget(self._title("准备完成"))
-        layout.addWidget(self._body(
-            "设置会保存在本机。点“完成”回到主页，再点“开始分离”即可。\n"
-            "之后可以随时在主页调整设备，或在“使用教程”里查看详细步骤。"))
+        layout.addWidget(self._title(t("onboarding.ready.title")))
+        layout.addWidget(self._body(t("onboarding.ready.body")))
         card, box = self._card()
         self.summary = ThemedLabel("", self._theme, role="muted", size=11, wrap=True)
         box.addWidget(self.summary)
@@ -220,24 +279,28 @@ class OnboardingDialog(QDialog):
     def _check_cable(self):
         try:
             _idx, name = resolve_cable_input(sd)
-            self.cable_status.setText("● 已检测到：" + name)
+            self.cable_status.setText(t("onboarding.output.detected", name=name))
             self.cable_status.setStyleSheet(
                 f"color:{self._theme.teal};font-size:11px;background:transparent;")
         except Exception:
-            self.cable_status.setText(
-                "● 未检测到虚拟声卡。请安装虚拟音频驱动后再点“重新检测”。")
+            self.cable_status.setText(t("onboarding.output.missing"))
             self.cable_status.setStyleSheet(
                 f"color:{self._theme.red};font-size:11px;background:transparent;")
 
     def _sync(self):
         index = self.stack.currentIndex()
-        self.step_label.setText(f"步骤 {index + 1} / {self.STEPS}")
+        self.step_label.setText(t(
+            "onboarding.step", current=index + 1, total=self.STEPS))
         self.back_btn.setEnabled(index > 0)
-        self.next_btn.setText("完成" if index == self.STEPS - 1 else "下一步")
+        self.next_btn.setText(
+            t("onboarding.finish") if index == self.STEPS - 1
+            else t("onboarding.next"))
         if index == self.STEPS - 1:
-            mic = self.mic.currentText() if self.mic.currentData() is not None else "未选择"
+            mic = (self.mic.currentText() if self.mic.currentData() is not None
+                   else t("onboarding.ready.not_selected"))
             camera = self.camera.currentText()
-            self.summary.setText(f"麦克风：{mic}\n摄像头：{camera}\n\n点“完成”后进入主页。")
+            self.summary.setText(t(
+                "onboarding.ready.summary", mic=mic, camera=camera))
 
     def _back(self):
         if self.stack.currentIndex() > 0:
@@ -257,15 +320,26 @@ class OnboardingDialog(QDialog):
         if selected is not None:
             self.mic_name = str(selected["name"])
             self.mic_hostapi = str(selected["hostapi"])
-        self.camera = int(self.camera.currentData())
+        camera_data = self.camera.currentData()
+        self.camera = int(camera_data) if camera_data is not None else 0
         self._settings.mic_name = self.mic_name
         self._settings.mic_hostapi = self.mic_hostapi
         self._settings.camera = self.camera
+        if self.language_changed:
+            self._settings.language = self.language
         self._settings.onboarding_done = True
         self.applied = True
         self.accept()
 
     def _skip(self):
+        if self.language_changed:
+            self._settings.language = self.language
         self._settings.onboarding_done = True
         self.applied = False
         self.accept()
+
+    def reject(self):
+        # Cancelling the wizard must not leave the app in a half-applied
+        # language that is not saved.
+        set_language(self.start_language)
+        super().reject()

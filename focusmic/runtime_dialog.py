@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout
 
 from . import runtime
 from .controls import LinkLabel, ThemedLabel
+from .i18n import t
 
 
 class RuntimeDialog(QDialog):
@@ -15,7 +16,7 @@ class RuntimeDialog(QDialog):
     def __init__(self, theme, parent=None):
         super().__init__(parent)
         self._theme = theme
-        self.setWindowTitle("安装 AI 运行时")
+        self.setWindowTitle(t("runtime.window_title"))
         self.setModal(True)
         self.setMinimumWidth(540)
 
@@ -23,24 +24,22 @@ class RuntimeDialog(QDialog):
         layout.setContentsMargins(22, 20, 22, 18)
         layout.setSpacing(12)
         layout.addWidget(ThemedLabel(
-            "需要安装 AI 运行时", theme, role="text", size=16, weight=600))
+            t("runtime.heading"), theme, role="text", size=16, weight=600))
         layout.addWidget(ThemedLabel(
-            "FocusMic 主程序不包含 PyTorch 和 CUDA（约 4.3 GB），"
-            "需要单独安装一次运行时包。安装完成后回到这里点击“重新检测”。",
-            theme, role="muted", size=11, wrap=True))
+            t("runtime.body"), theme, role="muted", size=11, wrap=True))
         self.status_label = ThemedLabel("", theme, role="red", size=10, wrap=True)
         layout.addWidget(self.status_label)
         layout.addWidget(LinkLabel(
-            "打开 GitHub Releases 下载 FocusMic-Runtime", runtime.RELEASES_URL, theme, size=11))
+            t("runtime.link"), runtime.RELEASES_URL, theme, size=11))
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
-        download = QPushButton("下载运行时包")
+        download = QPushButton(t("runtime.download"))
         download.setObjectName("primary")
         download.clicked.connect(self._download)
-        recheck = QPushButton("重新检测")
+        recheck = QPushButton(t("runtime.recheck"))
         recheck.clicked.connect(self._recheck)
-        close = QPushButton("关闭")
+        close = QPushButton(t("runtime.close"))
         close.setObjectName("ghost")
         close.clicked.connect(self.reject)
         buttons.addWidget(download)
@@ -57,9 +56,9 @@ class RuntimeDialog(QDialog):
         status = runtime.check_installed()
         self.status_label.set_theme(self._theme)
         if status.ok:
-            self.status_label.setText(
-                f"已检测到 PyTorch {status.torch_version} / "
-                f"CUDA {status.cuda_version}，可以开始分离了。")
+            self.status_label.setText(t(
+                "runtime.ready", torch=status.torch_version,
+                cuda=status.cuda_version))
             self.accept()
             return
         self.status_label.setText(status.message())

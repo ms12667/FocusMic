@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .i18n import t
 from .monitor import MonitorOutput
 from .output import CableOutput
 from .paths import weight_path
@@ -100,12 +101,12 @@ class NativePipeline:
         if self.monitor is not None:
             try:
                 monitor_status = self.monitor.start()
-                self.log(
-                    f"耳机监听输出：{monitor_status.get('device')} "
-                    f"({monitor_status.get('samplerate')} Hz)")
+                self.log(t(
+                    "log.monitor_output", device=monitor_status.get("device"),
+                    rate=monitor_status.get("samplerate")))
             except Exception as exc:
                 self.monitor_error = str(exc)
-                self.log(f"耳机监听不可用，继续分离：{exc}")
+                self.log(t("log.monitor_unavailable", error=exc))
                 try:
                     self.monitor.stop()
                 except Exception:
@@ -146,8 +147,7 @@ class NativePipeline:
                         last_total = self.audio.total
                         last_progress = now
                     elif now - last_progress > 1.5:
-                        raise RuntimeError(
-                            "麦克风没有音频数据（设备可能已断开）。")
+                        raise RuntimeError(t("log.mic_no_audio"))
                     time.sleep(0.005)
                 if not self.running:
                     break
@@ -213,11 +213,11 @@ class NativePipeline:
                         self.bypass = True
                         self.bypass_count += 1
                         mode_changed = True
-                        print("视觉丢失：直通原始麦克风", flush=True)
+                        print(t("log.visual_lost"), flush=True)
                     elif self.bypass and ok_windows >= 2:
                         self.bypass = False
                         mode_changed = True
-                        print("视觉恢复：回到分离输出", flush=True)
+                        print(t("log.visual_found"), flush=True)
                 if self.manual_bypass and not self._last_manual:
                     self.manual_bypass_count += 1
                 self._last_manual = self.manual_bypass
@@ -273,13 +273,14 @@ class NativePipeline:
                     lag = (self.audio.total - end) / 16000.0
                     self.last_lag = lag
                     out = self.output.status() if self.output is not None else {"active": False}
-                    self.log(
-                        f"推理 {self.last_infer_ms:5.1f} ms · 全链路 "
-                        f"{self.last_full_latency:4.2f} s · 窗口 {self.windows} · "
-                        f"跳过 {self.skipped} · "
-                        f"跟踪 {tracked*100:5.1f}% · CABLE "
-                        f"{out.get('queued',0)}q/{out.get('dropped',0)}drop"
-                        f"{' · 直通' if (self.bypass or self.manual_bypass) else ''}")
+                    self.log(t(
+                        "log.stats", infer=self.last_infer_ms,
+                        full=self.last_full_latency, windows=self.windows,
+                        skipped=self.skipped, tracked=tracked * 100.0,
+                        queued=out.get("queued", 0),
+                        dropped=out.get("dropped", 0),
+                        bypass=(t("log.stats.bypass")
+                                if (self.bypass or self.manual_bypass) else "")))
                 end += self.hop
         except KeyboardInterrupt:
             pass

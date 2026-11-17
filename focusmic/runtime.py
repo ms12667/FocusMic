@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .i18n import t
 from .paths import localappdata_dir
 
 RUNTIME_DIR_NAME = "runtime"
@@ -47,13 +48,13 @@ class RuntimeStatus:
 
     def message(self) -> str:
         if self.ok:
-            text = f"AI 运行时已就绪：PyTorch {self.torch_version}"
             if self.cuda_version:
-                text += f" / CUDA {self.cuda_version}"
-            return text
-        text = self.reason or "AI 运行时不可用"
+                return t("runtime.status.ready_cuda",
+                         torch=self.torch_version, cuda=self.cuda_version)
+            return t("runtime.status.ready", torch=self.torch_version)
+        text = self.reason or t("runtime.status.unavailable")
         if self.root:
-            text += f"\n\n运行时目录：{self.root}"
+            text += t("runtime.status.root", root=self.root)
         if self.detail:
             text += f"\n{self.detail}"
         return text
@@ -118,8 +119,8 @@ def check_installed() -> RuntimeStatus:
     root, torch_dir = _candidate()
     if torch_dir is None:
         return RuntimeStatus(
-            ok=False, root=root, reason="未检测到 AI 运行时（PyTorch + CUDA）。",
-            detail="请先安装 FocusMic-Runtime 运行时包，然后点击“重新检测”。",
+            ok=False, root=root, reason=t("runtime.status.missing"),
+            detail=t("runtime.status.missing_detail"),
         )
     version, cuda = _read_versions(torch_dir)
     tag = _extension_tag(torch_dir)
@@ -128,29 +129,30 @@ def check_installed() -> RuntimeStatus:
         return RuntimeStatus(
             ok=False, root=root, torch_dir=torch_dir,
             torch_version=version, cuda_version=cuda,
-            reason="AI 运行时文件不完整。",
-            detail="缺少 torch/version.py 或 torch/_C 扩展，请重新安装运行时包。",
+            reason=t("runtime.status.incomplete"),
+            detail=t("runtime.status.incomplete_detail"),
         )
     if tag != expected_tag:
         return RuntimeStatus(
             ok=False, root=root, torch_dir=torch_dir,
             torch_version=version, cuda_version=cuda, python_tag=tag,
-            reason="AI 运行时的 Python 版本与 FocusMic 不匹配。",
-            detail=f"运行时为 {tag}，FocusMic 需要 {expected_tag}，请重新安装对应的运行时包。",
+            reason=t("runtime.status.abi"),
+            detail=t("runtime.status.abi_detail", actual=tag, expected=expected_tag),
         )
     if not version.startswith(EXPECTED_TORCH):
         return RuntimeStatus(
             ok=False, root=root, torch_dir=torch_dir,
             torch_version=version, cuda_version=cuda, python_tag=tag,
-            reason=f"AI 运行时版本不匹配：需要 PyTorch {EXPECTED_TORCH}。",
-            detail=f"检测到 PyTorch {version}，请安装与当前 FocusMic 匹配的运行时包。",
+            reason=t("runtime.status.torch", expected=EXPECTED_TORCH),
+            detail=t("runtime.status.torch_detail", actual=version),
         )
     if cuda != EXPECTED_CUDA:
         return RuntimeStatus(
             ok=False, root=root, torch_dir=torch_dir,
             torch_version=version, cuda_version=cuda, python_tag=tag,
-            reason=f"AI 运行时 CUDA 版本不匹配：需要 CUDA {EXPECTED_CUDA}。",
-            detail=f"检测到 CUDA {cuda or '未知'}，请安装与当前 FocusMic 匹配的运行时包。",
+            reason=t("runtime.status.cuda", expected=EXPECTED_CUDA),
+            detail=t("runtime.status.cuda_detail",
+                     actual=cuda or t("common.unknown")),
         )
     return RuntimeStatus(
         ok=True, root=root, torch_dir=torch_dir,
@@ -202,7 +204,7 @@ def ensure_runtime(check_cuda: bool = False) -> RuntimeStatus:
                 torch_version=status.torch_version,
                 cuda_version=status.cuda_version,
                 python_tag=status.python_tag,
-                reason="AI 运行时加载失败。",
+                reason=t("runtime.status.load_failed"),
                 detail=detail,
             )
             _loaded_status = failed
@@ -228,8 +230,8 @@ def ensure_runtime(check_cuda: bool = False) -> RuntimeStatus:
                 torch_version=status.torch_version,
                 cuda_version=status.cuda_version,
                 python_tag=status.python_tag, cuda_available=False,
-                reason="CUDA 不可用。",
-                detail=detail or "请确认 NVIDIA 显卡驱动已安装，并且不是 CPU 版 PyTorch。",
+                reason=t("runtime.status.cuda_unavailable"),
+                detail=detail or t("runtime.status.cuda_unavailable_detail"),
             )
             _loaded_status = failed
             return failed

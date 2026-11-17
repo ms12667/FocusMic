@@ -5,6 +5,8 @@ from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from .i18n import ui_font_family
+
 
 class ThemedLabel(QLabel):
     """A QLabel whose color follows the current Theme."""
@@ -23,7 +25,7 @@ class ThemedLabel(QLabel):
 
     def set_theme(self, theme):
         color = getattr(theme, self._role, theme.muted)
-        family = "Cascadia Mono" if self._mono else "Microsoft YaHei UI"
+        family = "Cascadia Mono" if self._mono else ui_font_family()
         weight = f"font-weight:{self._weight};" if self._weight else ""
         self.setStyleSheet(
             f"color:{color};font-family:'{family}';font-size:{self._size}px;"
@@ -45,7 +47,8 @@ class LinkLabel(QLabel):
 
     def set_theme(self, theme):
         self.setStyleSheet(
-            f"font-family:'Microsoft YaHei UI';font-size:{self._size}px;background:transparent;")
+            f"font-family:'{ui_font_family()}';font-size:{self._size}px;"
+            f"background:transparent;")
         self.setText(
             f'<a href="{self._url}" style="color:{theme.blue};text-decoration:none;">'
             f'{self._text}</a>')

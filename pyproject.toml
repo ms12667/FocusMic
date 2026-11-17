@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "focusmic"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local audio-visual target speaker extraction for Windows"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12,<3.13"
@@ -40,6 +40,7 @@ focusmic = [
   "assets/icons/*",
   "assets/icons/lucide/*",
   "assets/mediapipe/*",
+  "locales/*.json",
   "vendor/falcon/LICENSE",
   "vendor/falcon/configs/*.yml",
   "vendor/falcon/falcon_model/PROVENANCE.md",

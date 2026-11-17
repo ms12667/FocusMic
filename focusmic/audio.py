@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .i18n import t
+
 
 def list_input_devices(sd) -> list[dict]:
     out = []
@@ -25,10 +27,95 @@ def list_input_devices(sd) -> list[dict]:
     return out
 
 
+def _device_match_key(name: str) -> str:
+    """Normalize PortAudio names so truncated MME entries match their twins."""
+    text = str(name or "").lower().replace("(", " ").replace(")", " ")
+    return " ".join(text.split())
+
+
+def _same_endpoint(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    short, long = sorted((left, right), key=len)
+    if len(short) < 8:
+        return False
+    return long.startswith(short) and len(short) / len(long) >= 0.65
+
+
+def _input_device_score(device: dict) -> int:
+    """Prefer the modern WASAPI endpoint over the same device's legacy twins."""
+    api = str(device.get("hostapi", "")).upper()
+    score = 0
+    if "WASAPI" in api:
+        score += 400
+    elif "DIRECTSOUND" in api:
+        score += 300
+    elif "MME" in api:
+        score += 200
+    elif "WDM-KS" in api:
+        score += 100
+    try:
+        score += min(40, int(round(float(device.get("samplerate", 0)) / 1200)))
+    except (TypeError, ValueError):
+        pass
+    return score
+
+
+def recommended_input_devices(devices: list[dict], show_all: bool = False) -> list[dict]:
+    """Collapse PortAudio's per-host-API duplicates into one entry per endpoint.
+
+    PortAudio lists the same physical microphone once for MME, DirectSound,
+    WASAPI and WDM-KS. A first-run user should not have to understand that.
+    The default list keeps only WASAPI endpoints (the modern Windows API);
+    if a machine exposes no WASAPI input at all, fall back to one best-scored
+    entry per name and mark the collapsed ones as recommended. With
+    ``show_all`` the raw list is returned unchanged for troubleshooting.
+    """
+    if show_all:
+        return [dict(device) for device in devices]
+    groups: list[dict] = []
+    for device in devices:
+        key = _device_match_key(device.get("name", ""))
+        group = next(
+            (item for item in groups if _same_endpoint(key, item["key"])), None)
+        if group is None:
+            groups.append({"key": key, "items": [device]})
+        else:
+            group["items"].append(device)
+            if len(key) > len(group["key"]):
+                group["key"] = key
+    deduped = []
+    for group in groups:
+        representative = dict(max(group["items"], key=_input_device_score))
+        representative["recommended"] = len(group["items"]) > 1
+        representative["hostapi_count"] = len({
+            str(device.get("hostapi", "")) for device in group["items"]})
+        deduped.append(representative)
+    wasapi = [device for device in deduped
+              if "WASAPI" in str(device.get("hostapi", "")).upper()]
+    if wasapi:
+        # When every visible row is WASAPI the badge would be noise.
+        for device in wasapi:
+            device["recommended"] = False
+        return wasapi
+    return deduped
+
+
+def input_device_label(device: dict) -> str:
+    text = f"{device['name']}  ·  {device['hostapi']}"
+    if device.get("recommended"):
+        text += f"  ·  {t('home.device.recommended')}"
+    return text
+
+
+def visible_input_devices(sd, show_all: bool = False) -> list[dict]:
+    return recommended_input_devices(list_input_devices(sd), show_all=show_all)
+
+
 def resolve_input(sd, spec: str | int | None) -> tuple[int, dict]:
     devices = list_input_devices(sd)
     if not devices:
-        raise RuntimeError("没有可用的录音设备。")
+        raise RuntimeError(t("error.no_input"))
     if spec is None or spec == "":
         wanted = sd.default.device[0]
         # Prefer a physical WASAPI endpoint at 48 kHz over MME/DirectSound
@@ -48,11 +135,11 @@ def resolve_input(sd, spec: str | int | None) -> tuple[int, dict]:
         for d in devices:
             if d["index"] == idx:
                 return idx, d
-        raise RuntimeError(f"找不到录音设备索引 {idx}。")
+        raise RuntimeError(t("error.mic_index", index=idx))
     needle = str(spec).lower()
     matches = [d for d in devices if needle in d["name"].lower()]
     if not matches:
-        raise RuntimeError(f"找不到名称包含 {spec!r} 的录音设备。")
+        raise RuntimeError(t("error.mic_name", spec=repr(spec)))
     # Prefer WASAPI, then a non-virtual physical device.
     matches.sort(key=lambda d: (
         "WASAPI" not in d["hostapi"],
@@ -100,7 +187,7 @@ class LiveAudio:
                 return self
             except Exception:
                 self.stream = None
-        raise RuntimeError(f"无法打开录音设备：{self.info['name']}")
+        raise RuntimeError(t("error.open_mic", name=self.info["name"]))
 
     def _callback(self, indata, frames, time_info, status):
         if status:

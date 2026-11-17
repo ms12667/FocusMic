@@ -7,6 +7,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from .i18n import t, ui_font_family
+
 
 class LineChart(QWidget):
     def __init__(self, color: str, theme, parent=None, points: int = 50,
@@ -95,11 +97,11 @@ class LineChart(QWidget):
             painter.setBrush(self._color)
             painter.drawEllipse(QPointF(x, y), 2.6, 2.6)
         painter.setPen(QColor(self._theme.faint))
-        painter.setFont(QFont("Microsoft YaHei UI", 7))
+        painter.setFont(QFont(ui_font_family(), 7))
         painter.drawText(QRectF(rect.left(), rect.bottom() + 3, 50, 14),
                          Qt.AlignLeft | Qt.AlignVCenter, "−30s")
         painter.drawText(QRectF(rect.right() - 28, rect.bottom() + 3, 28, 14),
-                         Qt.AlignRight | Qt.AlignVCenter, "现在")
+                         Qt.AlignRight | Qt.AlignVCenter, t("chart.now"))
 
 
 class MetricCard(QFrame):
@@ -135,7 +137,7 @@ class MetricCard(QFrame):
         if fixed_max is not None:
             self.chart._fixed_max = fixed_max
         root.addWidget(self.chart, 1)
-        self.footer = QLabel("等待数据")
+        self.footer = QLabel(t("chart.waiting"))
         self.footer.setObjectName("Faint")
         root.addWidget(self.footer)
         self.set_theme(theme)
@@ -169,9 +171,9 @@ class MetricCard(QFrame):
             self.value.setText(text)
         vals = list(self._values)
         if vals:
-            self.footer.setText(
-                f"平均 {self._format(sum(vals)/len(vals))} · "
-                f"最高 {self._format(max(vals))} {self._unit}")
+            self.footer.setText(t(
+                "chart.footer", avg=self._format(sum(vals) / len(vals)),
+                peak=self._format(max(vals)), unit=self._unit))
 
 
 class KpiCard(QFrame):

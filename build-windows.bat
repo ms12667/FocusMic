@@ -35,7 +35,7 @@ if errorlevel 1 goto :fail
 echo.
 echo [FocusMic] Done.
 echo   App:       dist\FocusMic\FocusMic.exe
-echo   Installer: dist\installer\FocusMic-Setup-0.1.0.exe
+echo   Installer: dist\installer\FocusMic-Setup-0.1.1.exe
 echo   Runtime:   dist\installer\FocusMic-Runtime-2.9.1-cu128.exe (run build-runtime.bat)
 if /I "%~1"=="--pause" pause
 exit /b 0

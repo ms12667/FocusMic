@@ -9,6 +9,8 @@ from PySide6.QtGui import QFont
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
+from .config import load_settings
+from .i18n import set_language, ui_font_family
 from .logging_setup import setup_logging
 from .ui import MainWindow
 
@@ -27,7 +29,9 @@ def main() -> int:
     log = setup_logging()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    app.setFont(QFont("Microsoft YaHei UI", 10))
+    # Resolve the saved language before any window builds its labels.
+    set_language(load_settings().language)
+    app.setFont(QFont(ui_font_family(), 10))
     app.setApplicationName("FocusMic")
     app.setOrganizationName("FocusMic")
 

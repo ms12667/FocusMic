@@ -19,6 +19,7 @@ falcon_hidden = collect_submodules("falcon_model")
 
 datas = [
     (str(ROOT / "focusmic" / "assets"), "focusmic/assets"),
+    (str(ROOT / "focusmic" / "locales"), "focusmic/locales"),
     (str(ROOT / "weights"), "weights"),
     (str(VENDOR / "configs"), "focusmic/vendor/falcon/configs"),
     (str(VENDOR / "LICENSE"), "focusmic/vendor/falcon"),
@@ -62,6 +63,7 @@ hiddenimports = list(mediapipe_hidden) + list(falcon_hidden) + torch_stdlib + [
     "falcon_model.videomodels.shufflenetv2",
     "PySide6.QtSvg",
     "PySide6.QtNetwork",
+    "PySide6.QtMultimedia",
     "pynvml",
     "keyboard",
     "sounddevice",

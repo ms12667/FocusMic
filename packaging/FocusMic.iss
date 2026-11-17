@@ -3,7 +3,7 @@
 ;   "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" packaging\FocusMic.iss
 
 #define MyAppName "FocusMic"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "FocusMic"
 #define MyAppURL "https://github.com/ms12667/FocusMic"
 #define MyAppExeName "FocusMic.exe"
@@ -37,7 +37,7 @@ AllowNoIcons=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 AppMutex=FocusMicAppMutex
-VersionInfoVersion=0.1.0.0
+VersionInfoVersion=0.1.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoProductName={#MyAppName}

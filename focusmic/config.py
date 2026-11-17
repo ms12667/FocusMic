@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .i18n import AUTO_LANGUAGE, normalize
 from .paths import config_path
 
 
@@ -12,6 +13,8 @@ from .paths import config_path
 class Settings:
     mic_name: str = ""
     mic_hostapi: str = ""
+    show_all_mics: bool = False
+    language: str = AUTO_LANGUAGE  # auto | zh_CN | zh_TW | en | ja | ...
     close_to_tray: bool = True
     camera: int = 0
     variant: str = "small"
@@ -32,6 +35,10 @@ def _coerce(data: dict) -> Settings:
     out = Settings()
     out.mic_name = str(data.get("mic_name", defaults.mic_name) or "")
     out.mic_hostapi = str(data.get("mic_hostapi", defaults.mic_hostapi) or "")
+    out.show_all_mics = bool(data.get("show_all_mics", defaults.show_all_mics))
+    language = str(data.get("language", defaults.language) or defaults.language).strip()
+    out.language = (AUTO_LANGUAGE if language.lower() == AUTO_LANGUAGE
+                    else (normalize(language) or defaults.language))
     out.close_to_tray = bool(data.get("close_to_tray", defaults.close_to_tray))
     try:
         out.camera = max(0, int(data.get("camera", defaults.camera)))

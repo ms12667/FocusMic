@@ -6,6 +6,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from .i18n import t, ui_font_family
+
 
 def _envelope(samples: np.ndarray, width: int) -> np.ndarray:
     """RMS amplitude per horizontal pixel, so both lanes share one scale."""
@@ -23,14 +25,17 @@ def _envelope(samples: np.ndarray, width: int) -> np.ndarray:
 
 
 def _paused_badge(painter: QPainter, theme, rect: QRectF, bottom: bool = False):
-    box = QRectF(rect.right() - 58, rect.bottom() - 24 if bottom else rect.top() + 4,
-                 54, 18)
+    text = t("report.paused")
+    painter.setFont(QFont(ui_font_family(), 8))
+    width = max(54.0, painter.fontMetrics().horizontalAdvance(text) + 14.0)
+    box = QRectF(rect.right() - width - 4,
+                 rect.bottom() - 24 if bottom else rect.top() + 4,
+                 width, 18)
     painter.setPen(QPen(QColor(theme.border), 1))
     painter.setBrush(QColor(theme.surface2))
     painter.drawRoundedRect(box, 5, 5)
     painter.setPen(QColor(theme.muted))
-    painter.setFont(QFont("Microsoft YaHei UI", 8))
-    painter.drawText(box, Qt.AlignCenter, "已停止")
+    painter.drawText(box, Qt.AlignCenter, text)
 
 
 def _spectrum(samples: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray] | None:
@@ -92,8 +97,10 @@ class WaveformCompare(QWidget):
         raw, out = self._raw, self._out
         if raw is None or out is None or raw.size == 0 or out.size == 0:
             painter.setPen(QColor(self._theme.faint))
-            painter.setFont(QFont("Microsoft YaHei UI", 9))
-            painter.drawText(rect, Qt.AlignCenter, "开始分离后显示最近 8 秒的输入 / 输出波形")
+            painter.setFont(QFont(ui_font_family(), 9))
+            painter.drawText(
+                rect.adjusted(12, 0, -12, 0),
+                Qt.AlignCenter | Qt.TextWordWrap, t("report.wave.empty"))
             painter.end()
             return
         n = min(len(raw), len(out))
@@ -106,11 +113,11 @@ class WaveformCompare(QWidget):
         peak = max(float(env_raw.max()), float(env_out.max()), 1e-5)
         lanes = (
             (QRectF(rect.left(), rect.top(), rect.width(), lane_h),
-             env_raw, self._theme.blue, "原始麦克风"),
+             env_raw, self._theme.blue, t("report.raw_long")),
             (QRectF(rect.left(), rect.top() + lane_h + gap, rect.width(), lane_h),
-             env_out, self._theme.teal, "处理后输出"),
+             env_out, self._theme.teal, t("report.out_long")),
         )
-        font = QFont("Microsoft YaHei UI", 8)
+        font = QFont(ui_font_family(), 8)
         painter.setFont(font)
         for lane, env, color, label in lanes:
             painter.setPen(Qt.NoPen)
@@ -143,7 +150,7 @@ class WaveformCompare(QWidget):
         painter.drawText(QRectF(rect.left() + 4, rect.bottom() - 17, 60, 15),
                          Qt.AlignLeft | Qt.AlignVCenter, "−8 s")
         painter.drawText(QRectF(rect.right() - 64, rect.bottom() - 17, 60, 15),
-                         Qt.AlignRight | Qt.AlignVCenter, "现在")
+                         Qt.AlignRight | Qt.AlignVCenter, t("chart.now"))
         if self._paused:
             _paused_badge(painter, self._theme, rect)
         painter.end()
@@ -179,14 +186,17 @@ class SpectrumCompare(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = QRectF(self.rect()).adjusted(6, 8, -8, -20)
+        # Leave a strip above the plot for the legend; otherwise translated
+        # labels sit on top of the curves.
+        rect = QRectF(self.rect()).adjusted(6, 24, -8, -20)
         raw = _spectrum(self._raw, self._sr) if self._raw is not None else None
         out = _spectrum(self._out, self._sr) if self._out is not None else None
         if raw is None or out is None:
             painter.setPen(QColor(self._theme.faint))
-            painter.setFont(QFont("Microsoft YaHei UI", 9))
-            painter.drawText(QRectF(self.rect()), Qt.AlignCenter,
-                             "等待更多音频（约 1 秒）")
+            painter.setFont(QFont(ui_font_family(), 9))
+            painter.drawText(
+                QRectF(self.rect()).adjusted(10, 0, -10, 0),
+                Qt.AlignCenter | Qt.TextWordWrap, t("report.spectrum.empty"))
             painter.end()
             return
         f_raw, db_raw = raw
@@ -209,7 +219,7 @@ class SpectrumCompare(QWidget):
             x = rect.left() + rect.width() * khz / 4.0
             painter.drawText(QRectF(x - 12, rect.bottom() + 3, 28, 14),
                              Qt.AlignHCenter, f"{khz}k")
-        painter.drawText(QRectF(rect.right() - 34, rect.top() - 7, 34, 14),
+        painter.drawText(QRectF(rect.right() - 34, rect.top() - 22, 34, 14),
                          Qt.AlignRight, f"{hi:.0f} dB")
         # Curves.
         for freqs, db, color in ((f_raw, db_raw, self._theme.blue),
@@ -228,15 +238,15 @@ class SpectrumCompare(QWidget):
             painter.setBrush(Qt.NoBrush)
             painter.drawPath(path)
         # Legend.
-        painter.setFont(QFont("Microsoft YaHei UI", 8))
-        for i, (label, color) in enumerate((("原始", self._theme.blue),
-                                            ("输出", self._theme.teal))):
-            x = rect.left() + 6 + i * 52
+        painter.setFont(QFont(ui_font_family(), 8))
+        for i, (label, color) in enumerate(((t("report.raw"), self._theme.blue),
+                                            (t("report.out"), self._theme.teal))):
+            x = rect.left() + 6 + i * 64
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(color))
-            painter.drawEllipse(QPointF(x, rect.top() + 5), 2.5, 2.5)
+            painter.drawEllipse(QPointF(x, rect.top() - 11), 2.5, 2.5)
             painter.setPen(QColor(self._theme.muted))
-            painter.drawText(QRectF(x + 6, rect.top() - 3, 40, 16),
+            painter.drawText(QRectF(x + 6, rect.top() - 19, 56, 16),
                              Qt.AlignLeft | Qt.AlignVCenter, label)
         if self._paused:
             _paused_badge(painter, self._theme, rect, bottom=True)

@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .i18n import t
 from .paths import mediapipe_model
 
 CROP = 96
@@ -116,13 +117,13 @@ class MouthTracker:
             self.cap.release()
             self.cap = cv2.VideoCapture(self.camera)
         if not self.cap.isOpened():
-            raise RuntimeError(f"无法打开摄像头 {self.camera}。")
+            raise RuntimeError(t("error.camera_open", index=self.camera))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.cap.set(cv2.CAP_PROP_FPS, self.fps)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if self.model_path is None or not self.model_path.is_file():
-            raise RuntimeError("找不到 MediaPipe face_landmarker.task。")
+            raise RuntimeError(t("error.face_model"))
         options = vision.FaceLandmarkerOptions(
             base_options=python.BaseOptions(model_asset_path=str(self.model_path)),
             running_mode=vision.RunningMode.VIDEO,

@@ -31,6 +31,8 @@ FocusMic 是一个 Windows 桌面应用：摄像头看嘴型，麦克风听声�
 - 保留目标说话人的声音，尽量压低同一画面/同一房间里的其他人声。
 - 手遮住嘴、离开画面或目标丢失时，自动直通原始麦克风，避免突然“没声音”。
 - 支持手动框选目标脸、重新锁定、全局旁路热键、托盘常驻、设备热插拔。
+- 麦克风列表默认只显示 WASAPI 并合并重复接口，可在设置里显示全部接口；摄像头下拉显示设备名、分辨率和帧率。
+- 界面支持简体中文、繁體中文、English、日本語、한국어、Español、Français、Deutsch、Português (Brasil)、Русский；可在首次向导或设置里切换。
 - Falcon Small 单窗推理约 **65–85 ms**；Falcon Big 约 **75 ms**。
 - 内部同音色干扰测试：纯音频基线 SIR 约 **0.6 dB**，口型路线约 **15.1 dB**。
 - 等响度合成素材：SI-SDR 约 **+3.3 dB**，SIR 约 **25.5 dB**。
@@ -85,7 +87,7 @@ FocusMic 不是传统降噪器的替代品。它解决的是“房间里有两�
 1. 安装 [**VB-CABLE**](https://vb-audio.com/Cable/)（官方下载页；虚拟音频驱动，需单独安装）。
 2. 从 [Releases](https://github.com/ms12667/FocusMic/releases) 下载两个文件：
    - `FocusMic-Runtime-2.9.1-cu128.exe`（PyTorch 2.9.1 + CUDA 12.8，约 1.72 GiB）
-   - `FocusMic-Setup-0.1.0.exe`（主程序，约 235 MB）
+   - `FocusMic-Setup-0.1.1.exe`（主程序，约 242 MB）
 3. 先运行运行时安装包，再运行主程序安装包。两者都是当前用户安装，不需要管理员权限。
 4. 第一次启动会打开向导，选择麦克风和摄像头。
 5. 在语音/会议软件里把麦克风选为 **CABLE Output**，并关闭它自带的降噪、AGC 和回声消除。
@@ -115,7 +117,7 @@ Windows 对两个端点的分类容易让人困惑：
 3. 如果画面里有其他人脸，点“框选目标”在预览里框住自己的脸；点“重新锁定”可恢复自动选择。
 4. 手遮嘴或按 `Ctrl+Alt+M` 可切到原始麦克风（旁路）；松开/再按恢复分离。
 5. 关闭窗口默认最小化到托盘，分离继续运行；设置里可改成直接退出。托盘右键菜单可显示、开始/停止、旁路和退出。
-6. 设置页可改主题、开机启动、全局热键、关闭行为和首次向导。
+6. 设置页可改主题、界面语言、音频接口显示、开机启动、全局热键、关闭行为和首次向导。
 
 ### 隐私
 
@@ -213,6 +215,12 @@ Typical use cases:
   frame, or the target is lost, so you are never suddenly muted.
 - Manual ROI selection, re-acquire, global bypass hotkey, tray mode, and device
   hot-plug support.
+- Microphone lists show only WASAPI by default and collapse duplicate host-API
+  entries; all interfaces can be shown in Settings. Camera labels include the
+  device name, resolution and frame rate.
+- UI in Simplified/Traditional Chinese, English, Japanese, Korean, Spanish,
+  French, German, Brazilian Portuguese and Russian; switch it in the first-run
+  wizard or Settings.
 - Falcon Small inference is about **65–85 ms** per 2 s window; Falcon Big about
   **75 ms**.
 - Internal same-voice test: audio-only baseline SIR about **0.6 dB**, lip-based
@@ -275,7 +283,7 @@ Other overhead:
 1. Install [**VB-CABLE**](https://vb-audio.com/Cable/) (official download page; virtual audio driver, installed separately).
 2. Download both files from [Releases](https://github.com/ms12667/FocusMic/releases):
    - `FocusMic-Runtime-2.9.1-cu128.exe` (PyTorch 2.9.1 + CUDA 12.8, about 1.72 GiB)
-   - `FocusMic-Setup-0.1.0.exe` (main app, about 235 MB)
+   - `FocusMic-Setup-0.1.1.exe` (main app, about 242 MB)
 3. Run the runtime installer first, then the main installer. Both are per-user
    and do not require administrator rights.
 4. On first launch, the wizard asks for your microphone and camera.
@@ -317,8 +325,8 @@ playback list.
 5. Closing the window hides FocusMic to the tray by default and separation
    continues. Settings can make × quit directly. The tray menu can show the
    window, start/stop, bypass, or quit.
-6. Settings control theme, startup, global hotkey, close behavior, and the
-   first-run wizard.
+6. Settings control theme, interface language, audio-interface visibility,
+   startup, global hotkey, close behavior, and the first-run wizard.
 
 ### Privacy
 

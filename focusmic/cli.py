@@ -11,9 +11,13 @@ except Exception:
     pass
 
 from .audio import LiveAudio, SimAudio, list_input_devices
+from .i18n import set_language
 from .paths import PROJECT_ROOT, mediapipe_model
 from .pipeline import NativePipeline
 from .video import MouthTracker, SimMouth
+
+# The CLI itself is Chinese; keep runtime error strings consistent with it.
+set_language("zh_CN")
 
 MEDIAPIPE_MODEL = mediapipe_model("face_landmarker.task")
 

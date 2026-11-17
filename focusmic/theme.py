@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from PySide6.QtGui import QColor
 
+from .i18n import ui_font_family
 from .paths import ASSETS_DIR
 
 _CHEVRON = (ASSETS_DIR / "icons" / "chevron-down.svg").as_posix()
@@ -87,10 +88,11 @@ def stylesheet(t: Theme) -> str:
     danger_hover = QColor(t.red).lighter(112).name()
     danger_pressed = QColor(t.red).darker(112).name()
     danger_text = t.on_accent if t.dark else "#FFFFFF"
+    font = ui_font_family()
     return f"""
     QWidget {{
         color: {t.text};
-        font-family: "Microsoft YaHei UI";
+        font-family: "{font}";
         font-size: 13px;
     }}
     QMainWindow, QWidget#Root {{ background: {t.bg}; }}
@@ -204,7 +206,7 @@ def stylesheet(t: Theme) -> str:
         border-radius: 9px;
         padding: 8px;
         color: {t.muted};
-        font-family: "Cascadia Mono", "Microsoft YaHei UI";
+        font-family: "Cascadia Mono", "{font}";
         font-size: 11px;
     }}
     QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}

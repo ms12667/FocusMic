@@ -1,6 +1,6 @@
-# FocusMic 0.1.0
+# FocusMic 0.1.1
 
-首个公开版本 · First public release.
+多语言与设备体验更新 · Languages and device-picker update.
 
 FocusMic 用摄像头看嘴型、麦克风听声音，在本地把目标说话人的声音从同一房间的多人说话中分离出来。  
 FocusMic uses camera lip motion and microphone audio to extract the target speaker locally, even when other people in the room are talking.
@@ -9,33 +9,33 @@ FocusMic uses camera lip motion and microphone audio to extract the target speak
 
 | 文件 / File | 大小 / Size | 用途 / Purpose |
 |---|---:|---|
-| `FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB | 先安装；PyTorch 2.9.1 + CUDA 12.8 运行时 / install first |
-| `FocusMic-Setup-0.1.0.exe` | 234.6 MB | 再安装；主程序 / install second |
+| `FocusMic-Runtime-2.9.1-cu128.exe` | 1.72 GiB | 先安装；PyTorch 2.9.1 + CUDA 12.8 运行时（与 0.1.0 相同） / install first (unchanged from 0.1.0) |
+| `FocusMic-Setup-0.1.1.exe` | 242.1 MB | 再安装；主程序 / install second |
 | `SHA256SUMS.txt` | 1 KB | 校验和 / checksums |
 | VB-CABLE (external) | — | 官方下载 / official download: https://vb-audio.com/Cable/ |
 
-两个安装包都是当前用户安装，不需要管理员权限。  
-Both installers are per-user and do not require administrator rights.
+两个安装包都是当前用户安装，不需要管理员权限。已经安装过 0.1.0 运行时的用户只需安装新的主程序。
+
+Both installers are per-user and do not require administrator rights. If you already installed the 0.1.0 runtime, only the new main app is needed.
 
 ## 中文
+
+### 这个版本新增
+
+- **10 种界面语言**：简体中文、繁體中文、English、日本語、한국어、Español、Français、Deutsch、Português (Brasil)、Русский。
+- 设置页新增“语言”，可选“跟随系统”；首次向导顶部也能直接选择语言。
+- 空闲时切换语言立即生效；正在分离时会在停止后应用，当前页面和运行日志保留。
+- **麦克风列表去重**：默认只显示 WASAPI 接口，合并 MME/DirectSound/WASAPI/WDM-KS 的同名重复项；设置里可开启“显示所有音频接口”。
+- **摄像头信息**：下拉显示设备名、首选分辨率和帧率，例如 `HD Webcam · 1280×720 · 30 fps`。
+- 针对德语、俄语、日语等长文本调整了侧边栏宽度、设置底栏、预览提示、频谱图和报告空状态的换行。
 
 ### 安装顺序
 
 1. 安装 [VB-CABLE](https://vb-audio.com/Cable/) 虚拟声卡（官方下载，需单独安装）。
-2. 安装 `FocusMic-Runtime-2.9.1-cu128.exe`。
-3. 安装 `FocusMic-Setup-0.1.0.exe`。
+2. 安装 `FocusMic-Runtime-2.9.1-cu128.exe`。如果已经安装过 0.1.0 的运行时，可以跳过。
+3. 安装 `FocusMic-Setup-0.1.1.exe`。
 4. 首次启动选择麦克风和摄像头。
 5. 在语音/会议软件里把麦克风选为 **CABLE Output**，关闭其降噪、AGC 和回声消除。
-
-### 这个版本包含
-
-- 本地 Falcon 音视频目标说话人提取，Falcon Small 默认，Big 可选。
-- 摄像头预览、手动框选目标、重新锁定、手遮嘴/丢失目标自动直通。
-- 原生 CABLE 输出、耳机监听（跟随 Windows 当前默认播放设备）。
-- 性能信息、运行报告、中英双语关于页、深色/浅色主题。
-- 关闭窗口默认最小化到托盘，设置里可改为直接退出。
-- 麦克风按设备名 + host API 持久化；CABLE 输出、设备热插拔、首次向导。
-- 主程序不包含 PyTorch；运行时缺失时会显示安装引导，不会闪退。
 
 ### 已知限制
 
@@ -48,29 +48,23 @@ Both installers are per-user and do not require administrator rights.
 
 ## English
 
+### What's new
+
+- **10 UI languages**: Simplified/Traditional Chinese, English, Japanese, Korean, Spanish, French, German, Brazilian Portuguese and Russian.
+- A new Language setting (including Follow system) and a language picker in the first-run wizard.
+- Language changes apply immediately while idle; during separation they apply after stopping, preserving the current page and logs.
+- **Microphone de-duplication**: only WASAPI endpoints are shown by default, collapsing duplicate MME/DirectSound/WASAPI/WDM-KS entries. All interfaces can be enabled in Settings.
+- **Camera details**: the picker shows the device name, preferred resolution and frame rate, e.g. `HD Webcam · 1280×720 · 30 fps`.
+- Long-text layout fixes for German, Russian, Japanese and other languages across the sidebar, settings footer, preview hints, spectrum legend and report empty states.
+
 ### Install order
 
 1. Install the [VB-CABLE](https://vb-audio.com/Cable/) virtual audio driver (official download, installed separately).
-2. Install `FocusMic-Runtime-2.9.1-cu128.exe`.
-3. Install `FocusMic-Setup-0.1.0.exe`.
+2. Install `FocusMic-Runtime-2.9.1-cu128.exe`. If the 0.1.0 runtime is already installed, skip this step.
+3. Install `FocusMic-Setup-0.1.1.exe`.
 4. On first launch, select your microphone and camera.
 5. In your voice/meeting app, select **CABLE Output** as the microphone and
    disable its noise suppression, AGC and echo cancellation.
-
-### What's in this release
-
-- Local Falcon audio-visual target speaker extraction; Falcon Small by default,
-  Big selectable.
-- Camera preview, manual target ROI, re-acquire, automatic bypass when the mouth
-  is covered or the target is lost.
-- Native CABLE output and headphone monitoring that follows the current Windows
-  default playback endpoint.
-- Performance page, run report, bilingual About page, dark/light themes.
-- Closing the window hides to the tray by default; Settings can make × quit.
-- Microphone persistence by device name + host API; CABLE output, device
-  hot-plug, first-run wizard.
-- PyTorch is not bundled; a missing runtime shows installation guidance instead
-  of crashing.
 
 ### Known limitations
 
@@ -85,7 +79,7 @@ Both installers are per-user and do not require administrator rights.
 ## 校验 / Checksums
 
 ```text
-2bcba50dd94a8a61ef484a72bb58798baf16412bf8b2722818569f7a7ea9a55e  FocusMic-Setup-0.1.0.exe
+e25fcc40098ba4104ea95213fe2a3761ae7cca457191814265783a33146cc85a  FocusMic-Setup-0.1.1.exe
 70470a027728523e83d293c8e58d1988d2053da569b4f296c59a1a901a623af6  FocusMic-Runtime-2.9.1-cu128.exe
 ```
 

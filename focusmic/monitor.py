@@ -7,6 +7,8 @@ import time
 
 import numpy as np
 
+from .i18n import t
+
 
 def resolve_monitor_device(sd) -> tuple[int, str]:
     """Follow the Windows default playback endpoint, not an arbitrary WASAPI one.
@@ -59,7 +61,7 @@ def resolve_monitor_device(sd) -> tuple[int, str]:
             i, str(d["name"]), api,
         ))
     if not candidates:
-        raise RuntimeError("找不到耳机/扬声器输出设备。")
+        raise RuntimeError(t("error.monitor_missing"))
     candidates.sort()
     _, _, idx, name, api = candidates[0]
     return idx, f"{name} [{api}]"
