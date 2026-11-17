@@ -10,6 +10,14 @@ what is being said. It extracts **your** voice from a room where other people
 are talking at the same time, locally on your own GPU, and sends the result to
 a virtual audio cable for voice or meeting apps.
 
+## 界面预览 / Screenshots
+
+| 主页 / Home | 设置 / Settings |
+|---|---|
+| ![Home](docs/screenshots/en-0.png) | ![Settings](docs/screenshots/en-4.png) |
+| **使用教程 / Guide** | **关于 / About** |
+| ![Guide](docs/screenshots/zh_CN-1.png) | ![About](docs/screenshots/zh_CN-5.png) |
+
 ---
 
 ## 中文
